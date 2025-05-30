@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import Navbar from '../components/NavBar/NavBar';
 import { useAuth } from '../context/AuthContext';
 import * as api from '../api';
-import { DragDropContext, Droppable, Draggable, DropResult, DroppableProvided, DraggableProvided } from '@hello-pangea/dnd';
+import { DragDropContext, Draggable, DropResult, DroppableProvided, DraggableProvided } from '@hello-pangea/dnd';
+import { StrictModeDroppable } from '../components/StrictModeDroppable';
 
 interface Session {
   session_id: number;
@@ -210,6 +211,35 @@ const Workouts: React.FC = () => {
     if (detailsModal) openDetails(detailsModal.session);
   };
 
+  // Add a grid style for columns
+  const exerciseGrid = {
+    display: 'grid',
+    gridTemplateColumns: '60px 120px 60px 60px 80px 1fr 100px',
+    alignItems: 'center',
+    gap: '0 8px',
+    minHeight: 40,
+  };
+  const cellStyle = {
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    padding: '0 4px',
+  };
+  const actionCol = {
+    display: 'flex',
+    flexDirection: 'column' as 'column',
+    gap: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+  };
+  const btnOutline = {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    minHeight: 32,
+  };
+
   return (
     <div className="dashboard-bg">
       <Navbar />
@@ -251,53 +281,79 @@ const Workouts: React.FC = () => {
               <div><b>Date:</b> {formatDate(detailsModal.session.scheduled_date)}</div>
               <div><b>Notes:</b> {detailsModal.session.notes || '-'}</div>
               <div><b>Completed:</b> {detailsModal.session.completed ? 'Yes' : 'No'}</div>
-              <div style={{ margin: '18px 0 8px 0', fontWeight: 600 }}>Exercises:</div>
+              <div style={{ margin: '18px 0 8px 0', fontWeight: 600 }}>
+                Exercises:
+              </div>
+              <div style={{ ...exerciseGrid, fontWeight: 700, color: '#aaa', background: 'none', border: 'none', marginBottom: 4 }}>
+                <div style={cellStyle}>Type</div>
+                <div style={cellStyle}>Name</div>
+                <div style={cellStyle}>Sets</div>
+                <div style={cellStyle}>Reps</div>
+                <div style={cellStyle}>Weight</div>
+                <div style={cellStyle}>Note</div>
+                <div style={{ ...cellStyle, textAlign: 'center' }}>Actions</div>
+              </div>
               <DragDropContext onDragEnd={onDragEnd}>
-                <Droppable droppableId="exercises">
+                <StrictModeDroppable droppableId="exercises">
                   {(provided: DroppableProvided) => (
                     <div ref={provided.innerRef} {...provided.droppableProps}>
-                      {sessionDetails.map((detail, idx) => (
-                        <Draggable key={detail.session_detail_id} draggableId={detail.session_detail_id.toString()} index={idx}>
-                          {(providedDraggable: DraggableProvided) => (
-                            <div ref={providedDraggable.innerRef} {...providedDraggable.draggableProps} {...providedDraggable.dragHandleProps}>
-                              {/* Planned row */}
-                              <div style={{ display: 'flex', alignItems: 'center', padding: 8, background: '#232326', borderRadius: 6 }}>
-                                <div style={{ flex: 2 }}><b>{detail.name}</b></div>
-                                <div style={{ flex: 1 }}>Sets: {detail.planned_sets}</div>
-                                <div style={{ flex: 1 }}>Reps: {detail.planned_reps}</div>
-                                <div style={{ flex: 3 }}>{detail.description}</div>
-                                <div style={{ flex: 1 }}>
-                                  <button className="btn-outline" onClick={() => handleEditClick(detail)}>Edit</button>
-                                  <button className="btn-outline" style={{ marginLeft: 8 }} onClick={() => handleDeleteExercise(detail.session_detail_id)}>Delete</button>
-                                </div>
-                                <div style={{ flex: 1 }}>
-                                  <button className="btn-outline" onClick={() => { setShowLogForm(detail.session_detail_id); setLogForm({ actual_sets: '', actual_reps: '', weight_kg: '', notes: '' }); }}>Log</button>
-                                </div>
-                              </div>
-                              {/* Actual log row */}
-                              {(() => {
-                                const log = sessionLogs.find(l => l.session_detail_id === detail.session_detail_id);
-                                if (!log) return null;
-                                return (
-                                  <div style={{ display: 'flex', alignItems: 'center', padding: 8, background: '#18181a', borderRadius: 6, marginTop: 2, marginBottom: 2 }}>
-                                    <div style={{ flex: 2, color: '#aaa' }}>Actual</div>
-                                    <div style={{ flex: 1 }}>{log.actual_sets}</div>
-                                    <div style={{ flex: 1 }}>{log.actual_reps}</div>
-                                    <div style={{ flex: 3 }}>{log.notes}</div>
-                                    <div style={{ flex: 1 }}>{log.weight_kg} kg</div>
-                                    <div style={{ flex: 2 }}></div>
+                      {sessionDetails.map((detail, idx) => {
+                        const log = sessionLogs.find(l => l.session_detail_id === detail.session_detail_id);
+                        return (
+                          <Draggable key={detail.session_detail_id} draggableId={detail.session_detail_id.toString()} index={idx}>
+                            {(providedDraggable: DraggableProvided) => (
+                              <div ref={providedDraggable.innerRef} {...providedDraggable.draggableProps} {...providedDraggable.dragHandleProps}>
+                                {/* Plan row */}
+                                <div style={{ ...exerciseGrid, background: '#232326', borderRadius: 6, marginBottom: 2 }}>
+                                  <div style={{ ...cellStyle, fontWeight: 600, color: '#e66' }}>Plan</div>
+                                  <div style={{ ...cellStyle, fontWeight: 700 }}>{detail.name}</div>
+                                  <div style={cellStyle}>{detail.planned_sets}</div>
+                                  <div style={cellStyle}>{detail.planned_reps}</div>
+                                  <div style={cellStyle}></div>
+                                  <div style={cellStyle}>{detail.description}</div>
+                                  <div style={actionCol}>
+                                    <button className="btn-outline" style={btnOutline} onClick={() => handleEditClick(detail)}>Edit</button>
                                   </div>
-                                );
-                              })()}
-                              <hr style={{ border: '0', borderTop: '1px solid #333', margin: '10px 0' }} />
-                            </div>
-                          )}
-                        </Draggable>
-                      ))}
+                                </div>
+                                {/* Actual row */}
+                                {log && (
+                                  <div style={{ ...exerciseGrid, background: '#18181a', borderRadius: 6, marginBottom: 8 }}>
+                                    <div style={{ ...cellStyle, fontWeight: 600, color: '#6e6' }}>Actual</div>
+                                    <div style={{ ...cellStyle, fontWeight: 700 }}>{detail.name}</div>
+                                    <div style={cellStyle}>{log.actual_sets}</div>
+                                    <div style={cellStyle}>{log.actual_reps}</div>
+                                    <div style={cellStyle}>{log.weight_kg} kg</div>
+                                    <div style={cellStyle}>{log.notes}</div>
+                                    <div style={actionCol}>
+                                      <button className="btn-outline" style={btnOutline} onClick={() => handleDeleteExercise(detail.session_detail_id)}>Delete</button>
+                                      <button className="btn-outline" style={btnOutline} onClick={() => { setShowLogForm(detail.session_detail_id); setLogForm({ actual_sets: '', actual_reps: '', weight_kg: '', notes: '' }); }}>Log</button>
+                                    </div>
+                                  </div>
+                                )}
+                                {!log && (
+                                  <div style={{ ...exerciseGrid, background: '#18181a', borderRadius: 6, marginBottom: 8 }}>
+                                    <div style={{ ...cellStyle, fontWeight: 600, color: '#6e6' }}>Actual</div>
+                                    <div style={{ ...cellStyle, fontWeight: 700 }}>{detail.name}</div>
+                                    <div style={cellStyle}></div>
+                                    <div style={cellStyle}></div>
+                                    <div style={cellStyle}></div>
+                                    <div style={cellStyle}></div>
+                                    <div style={actionCol}>
+                                      <button className="btn-outline" style={btnOutline} onClick={() => handleDeleteExercise(detail.session_detail_id)}>Delete</button>
+                                      <button className="btn-outline" style={btnOutline} onClick={() => { setShowLogForm(detail.session_detail_id); setLogForm({ actual_sets: '', actual_reps: '', weight_kg: '', notes: '' }); }}>Log</button>
+                                    </div>
+                                  </div>
+                                )}
+                                <hr style={{ border: '0', borderTop: '1px solid #333', margin: '0 0 10px 0' }} />
+                              </div>
+                            )}
+                          </Draggable>
+                        );
+                      })}
                       {provided.placeholder}
                     </div>
                   )}
-                </Droppable>
+                </StrictModeDroppable>
               </DragDropContext>
               <button className="btn-primary" style={{ marginBottom: 16 }} onClick={() => { setShowAddExercise(true); fetchAllExercises(); }}>Add Exercise</button>
               <button className="btn-outline" style={{ marginTop: 16 }} onClick={() => setDetailsModal(null)}>Close</button>
