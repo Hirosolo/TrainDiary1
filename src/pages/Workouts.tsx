@@ -224,6 +224,12 @@ const Workouts: React.FC = () => {
     if (detailsModal) openDetails(detailsModal.session);
   };
 
+  const handleDeleteLog = async (log_id: number) => {
+    if (!window.confirm('Delete this log entry?')) return;
+    await fetch(`http://localhost:4000/api/workouts/logs/${log_id}`, { method: 'DELETE' });
+    if (detailsModal) openDetails(detailsModal.session);
+  };
+
   // Add a grid style for columns
   const exerciseGrid = {
     display: 'grid',
@@ -355,7 +361,7 @@ const Workouts: React.FC = () => {
               <div style={{ width: '100%', maxWidth: 1400, margin: '0 auto' }}>
                 <FlipMove duration={350} easing="ease-in-out">
                   {sessionDetails.map((detail, idx) => {
-                    const log = sessionLogs.find(l => l.session_detail_id === detail.session_detail_id);
+                    const logs = sessionLogs.filter(l => l.session_detail_id === detail.session_detail_id);
                     const isSelected = selectedForMove === idx;
                     return (
                       <div
@@ -400,21 +406,22 @@ const Workouts: React.FC = () => {
                             <button style={btnLog} className="btn-outline" onMouseOver={e => e.currentTarget.style.background = '#aaa2'} onMouseOut={e => e.currentTarget.style.background = 'transparent'} onClick={() => { setShowLogForm(detail.session_detail_id); setLogForm({ actual_sets: '', actual_reps: '', weight_kg: '', notes: '' }); }}>Log</button>
                           </div>
                         </div>
-                        {/* Actual row */}
-                        <div style={{ ...exerciseGrid, background: 'transparent', borderRadius: '0 0 8px 8px', marginTop: 6 }}>
-                          <div style={dragHandleStyle}></div>
-                          <div style={{ ...cellStyle, fontWeight: 600, color: '#6e6' }}>Actual</div>
-                          <div style={{ ...cellStyle, fontWeight: 700 }}>{detail.name}</div>
-                          <div style={cellStyle}>{log ? log.actual_sets : ''}</div>
-                          <div style={cellStyle}>{log ? log.actual_reps : ''}</div>
-                          <div style={cellStyle}>{log ? `${log.weight_kg} kg` : ''}</div>
-                          <div style={cellStyle}>{log ? log.notes : ''}</div>
-                          <div style={actionCol}>
-                            <button style={btnEdit} className="btn-outline" onMouseOver={e => e.currentTarget.style.background = '#36c1'} onMouseOut={e => e.currentTarget.style.background = 'transparent'} onClick={() => handleEditClick(detail)}>Edit</button>
-                            <button style={btnDelete} className="btn-outline" onMouseOver={e => e.currentTarget.style.background = '#e441'} onMouseOut={e => e.currentTarget.style.background = 'transparent'} onClick={() => handleDeleteExercise(detail.session_detail_id)}>Delete</button>
-                            {/* No Log button in Actual row */}
+                        {/* Actual rows: one for each log */}
+                        {logs.map((log, logIdx) => (
+                          <div key={log.log_id} style={{ ...exerciseGrid, background: 'transparent', borderRadius: logIdx === logs.length - 1 ? '0 0 8px 8px' : 0, marginTop: 6 }}>
+                            <div style={dragHandleStyle}></div>
+                            <div style={{ ...cellStyle, fontWeight: 600, color: '#6e6' }}>Actual</div>
+                            <div style={{ ...cellStyle, fontWeight: 700 }}>{detail.name}</div>
+                            <div style={cellStyle}>{log.actual_sets}</div>
+                            <div style={cellStyle}>{log.actual_reps}</div>
+                            <div style={cellStyle}>{log.weight_kg} kg</div>
+                            <div style={cellStyle}>{log.notes}</div>
+                            <div style={actionCol}>
+                              <button style={btnEdit} className="btn-outline" onMouseOver={e => e.currentTarget.style.background = '#36c1'} onMouseOut={e => e.currentTarget.style.background = 'transparent'} onClick={() => {/* TODO: handle edit log */}}>Edit</button>
+                              <button style={btnDelete} className="btn-outline" onMouseOver={e => e.currentTarget.style.background = '#e441'} onMouseOut={e => e.currentTarget.style.background = 'transparent'} onClick={() => handleDeleteLog(log.log_id)}>Delete</button>
+                            </div>
                           </div>
-                        </div>
+                        ))}
                       </div>
                     );
                   })}

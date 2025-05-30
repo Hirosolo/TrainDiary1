@@ -166,4 +166,17 @@ export const deleteSessionDetail = async (req: Request, res: Response) => {
   } finally {
     conn.release();
   }
+};
+
+export const deleteLog = async (req: Request, res: Response) => {
+  const { logId } = req.params;
+  const conn = await pool.getConnection();
+  try {
+    await conn.query('DELETE FROM exercise_logs WHERE log_id = ?', [logId]);
+    res.json({ message: 'Log deleted.' });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to delete log.', error: (err as Error).message });
+  } finally {
+    conn.release();
+  }
 }; 
