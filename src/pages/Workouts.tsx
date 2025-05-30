@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import Navbar from '../components/NavBar/NavBar';
 import { useAuth } from '../context/AuthContext';
 import * as api from '../api';
+import { DragDropContext, Droppable, Draggable, DropResult, DroppableProvided, DraggableProvided } from '@hello-pangea/dnd';
 
 interface Session {
   session_id: number;
@@ -32,6 +33,9 @@ interface SessionLog {
 interface Exercise {
   exercise_id: number;
   name: string;
+  default_sets?: number;
+  default_reps?: number;
+  description?: string;
 }
 
 const Workouts: React.FC = () => {
@@ -50,8 +54,10 @@ const Workouts: React.FC = () => {
   const [addExerciseForm, setAddExerciseForm] = useState({ exercise_id: '', planned_sets: '', planned_reps: '' });
   const [addExerciseError, setAddExerciseError] = useState('');
   const [showLogForm, setShowLogForm] = useState<number | null>(null);
-  const [logForm, setLogForm] = useState({ actual_sets: '', actual_reps: '', weight_kg: '', duration_seconds: '', notes: '' });
+  const [logForm, setLogForm] = useState({ actual_sets: '', actual_reps: '', weight_kg: '', notes: '' });
   const [logError, setLogError] = useState('');
+  const [editExerciseDetail, setEditExerciseDetail] = useState<SessionDetail | null>(null);
+  const [editForm, setEditForm] = useState({ planned_sets: '', planned_reps: '', notes: '' });
 
   useEffect(() => {
     if (user) fetchSessions();
@@ -132,18 +138,76 @@ const Workouts: React.FC = () => {
         actual_sets: logForm.actual_sets,
         actual_reps: logForm.actual_reps,
         weight_kg: logForm.weight_kg,
-        duration_seconds: logForm.duration_seconds,
         notes: logForm.notes
       })
     });
     const data = await res.json();
     if (data.message === 'Workout logged.') {
       setShowLogForm(null);
-      setLogForm({ actual_sets: '', actual_reps: '', weight_kg: '', duration_seconds: '', notes: '' });
+      setLogForm({ actual_sets: '', actual_reps: '', weight_kg: '', notes: '' });
       openDetails(detailsModal!.session);
     } else {
       setLogError(data.message || 'Failed to log workout');
     }
+  };
+
+  const formatDate = (dateStr: string) => {
+    const d = new Date(dateStr);
+    return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  };
+
+  const moveExercise = (idx: number, direction: number) => {
+    // TODO: Implement reordering logic and persist to backend
+    // For now, just a stub
+  };
+
+  const editExercise = (detail: SessionDetail) => {
+    // TODO: Implement edit modal logic
+    // For now, just a stub
+  };
+
+  const onDragEnd = (result: DropResult) => {
+    if (!result.destination) return;
+    const reordered = Array.from(sessionDetails);
+    const [removed] = reordered.splice(result.source.index, 1);
+    reordered.splice(result.destination.index, 0, removed);
+    setSessionDetails(reordered);
+    // TODO: Optionally persist new order to backend
+  };
+
+  const handleEditSave = () => {
+    // TODO: Persist edit to backend
+    if (editExerciseDetail) {
+      setSessionDetails(details => details.map(d => d.session_detail_id === editExerciseDetail.session_detail_id ? {
+        ...d,
+        planned_sets: Number(editForm.planned_sets),
+        planned_reps: Number(editForm.planned_reps),
+        description: editForm.notes
+      } : d));
+      setEditExerciseDetail(null);
+    }
+  };
+
+  const handleEditClick = (detail: SessionDetail) => {
+    setEditExerciseDetail(detail);
+    setEditForm({
+      planned_sets: detail.planned_sets.toString(),
+      planned_reps: detail.planned_reps.toString(),
+      notes: detail.description || ''
+    });
+  };
+
+  const handleDeleteSession = async (session_id: number) => {
+    if (!window.confirm('Delete this session and all its data?')) return;
+    await fetch(`http://localhost:4000/api/workouts/${session_id}`, { method: 'DELETE' });
+    fetchSessions();
+    setDetailsModal(null);
+  };
+
+  const handleDeleteExercise = async (session_detail_id: number) => {
+    if (!window.confirm('Delete this exercise and its logs?')) return;
+    await fetch(`http://localhost:4000/api/workouts/details/${session_detail_id}`, { method: 'DELETE' });
+    if (detailsModal) openDetails(detailsModal.session);
   };
 
   return (
@@ -155,10 +219,11 @@ const Workouts: React.FC = () => {
           {loading ? <div>Loading...</div> : sessions.length === 0 ? <div>No sessions yet.</div> : sessions.map(session => (
             <div className="dashboard-card" key={session.session_id}>
               <h3>Session #{session.session_id}</h3>
-              <div className="dashboard-value">Date: {session.scheduled_date}</div>
+              <div className="dashboard-value">Date: {formatDate(session.scheduled_date)}</div>
               <div className="dashboard-value">Notes: {session.notes || '-'}</div>
               <div className="dashboard-value">Completed: {session.completed ? 'Yes' : 'No'}</div>
               <button className="btn-primary" onClick={() => openDetails(session)}>View Details</button>
+              <button className="btn-outline" style={{ marginLeft: 8 }} onClick={() => handleDeleteSession(session.session_id)}>Delete</button>
             </div>
           ))}
         </div>
@@ -181,74 +246,88 @@ const Workouts: React.FC = () => {
         )}
         {detailsModal?.open && (
           <div className="modal-bg">
-            <div className="auth-card" style={{ maxWidth: 700, textAlign: 'left' }}>
+            <div className="auth-card" style={{ maxWidth: '80vw', minWidth: 700, textAlign: 'left' }}>
               <h3>Session Details</h3>
-              <div><b>Date:</b> {detailsModal.session.scheduled_date}</div>
+              <div><b>Date:</b> {formatDate(detailsModal.session.scheduled_date)}</div>
               <div><b>Notes:</b> {detailsModal.session.notes || '-'}</div>
               <div><b>Completed:</b> {detailsModal.session.completed ? 'Yes' : 'No'}</div>
               <div style={{ margin: '18px 0 8px 0', fontWeight: 600 }}>Exercises:</div>
-              {sessionDetails.length === 0 ? <div>No exercises yet.</div> : (
-                <table style={{ width: '100%', color: 'var(--text-color)', background: 'transparent', marginBottom: 12 }}>
-                  <thead>
-                    <tr>
-                      <th>Name</th>
-                      <th>Sets</th>
-                      <th>Reps</th>
-                      <th>Description</th>
-                      <th>Log</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sessionDetails.map(detail => (
-                      <tr key={detail.session_detail_id}>
-                        <td>{detail.name}</td>
-                        <td>{detail.planned_sets}</td>
-                        <td>{detail.planned_reps}</td>
-                        <td>{detail.description}</td>
-                        <td>
-                          <button className="btn-outline" onClick={() => { setShowLogForm(detail.session_detail_id); setLogForm({ actual_sets: '', actual_reps: '', weight_kg: '', duration_seconds: '', notes: '' }); }}>Log</button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
+              <DragDropContext onDragEnd={onDragEnd}>
+                <Droppable droppableId="exercises">
+                  {(provided: DroppableProvided) => (
+                    <div ref={provided.innerRef} {...provided.droppableProps}>
+                      {sessionDetails.map((detail, idx) => (
+                        <Draggable key={detail.session_detail_id} draggableId={detail.session_detail_id.toString()} index={idx}>
+                          {(providedDraggable: DraggableProvided) => (
+                            <div ref={providedDraggable.innerRef} {...providedDraggable.draggableProps} {...providedDraggable.dragHandleProps}>
+                              {/* Planned row */}
+                              <div style={{ display: 'flex', alignItems: 'center', padding: 8, background: '#232326', borderRadius: 6 }}>
+                                <div style={{ flex: 2 }}><b>{detail.name}</b></div>
+                                <div style={{ flex: 1 }}>Sets: {detail.planned_sets}</div>
+                                <div style={{ flex: 1 }}>Reps: {detail.planned_reps}</div>
+                                <div style={{ flex: 3 }}>{detail.description}</div>
+                                <div style={{ flex: 1 }}>
+                                  <button className="btn-outline" onClick={() => handleEditClick(detail)}>Edit</button>
+                                  <button className="btn-outline" style={{ marginLeft: 8 }} onClick={() => handleDeleteExercise(detail.session_detail_id)}>Delete</button>
+                                </div>
+                                <div style={{ flex: 1 }}>
+                                  <button className="btn-outline" onClick={() => { setShowLogForm(detail.session_detail_id); setLogForm({ actual_sets: '', actual_reps: '', weight_kg: '', notes: '' }); }}>Log</button>
+                                </div>
+                              </div>
+                              {/* Actual log row */}
+                              {(() => {
+                                const log = sessionLogs.find(l => l.session_detail_id === detail.session_detail_id);
+                                if (!log) return null;
+                                return (
+                                  <div style={{ display: 'flex', alignItems: 'center', padding: 8, background: '#18181a', borderRadius: 6, marginTop: 2, marginBottom: 2 }}>
+                                    <div style={{ flex: 2, color: '#aaa' }}>Actual</div>
+                                    <div style={{ flex: 1 }}>{log.actual_sets}</div>
+                                    <div style={{ flex: 1 }}>{log.actual_reps}</div>
+                                    <div style={{ flex: 3 }}>{log.notes}</div>
+                                    <div style={{ flex: 1 }}>{log.weight_kg} kg</div>
+                                    <div style={{ flex: 2 }}></div>
+                                  </div>
+                                );
+                              })()}
+                              <hr style={{ border: '0', borderTop: '1px solid #333', margin: '10px 0' }} />
+                            </div>
+                          )}
+                        </Draggable>
+                      ))}
+                      {provided.placeholder}
+                    </div>
+                  )}
+                </Droppable>
+              </DragDropContext>
               <button className="btn-primary" style={{ marginBottom: 16 }} onClick={() => { setShowAddExercise(true); fetchAllExercises(); }}>Add Exercise</button>
-              <div style={{ margin: '18px 0 8px 0', fontWeight: 600 }}>Logs:</div>
-              {sessionLogs.length === 0 ? <div>No logs yet.</div> : (
-                <table style={{ width: '100%', color: 'var(--text-color)', background: 'transparent' }}>
-                  <thead>
-                    <tr>
-                      <th>Exercise</th>
-                      <th>Sets</th>
-                      <th>Reps</th>
-                      <th>Weight (kg)</th>
-                      <th>Duration (s)</th>
-                      <th>Notes</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sessionLogs.map(log => (
-                      <tr key={log.log_id}>
-                        <td>{log.name}</td>
-                        <td>{log.actual_sets}</td>
-                        <td>{log.actual_reps}</td>
-                        <td>{log.weight_kg}</td>
-                        <td>{log.duration_seconds}</td>
-                        <td>{log.notes}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
               <button className="btn-outline" style={{ marginTop: 16 }} onClick={() => setDetailsModal(null)}>Close</button>
             </div>
+            {editExerciseDetail && (
+              <div className="modal-bg">
+                <div className="auth-card" style={{ maxWidth: 400 }}>
+                  <h3>Edit Exercise</h3>
+                  <input type="number" placeholder="Planned Sets" value={editForm.planned_sets} onChange={e => setEditForm(f => ({ ...f, planned_sets: e.target.value }))} required />
+                  <input type="number" placeholder="Planned Reps" value={editForm.planned_reps} onChange={e => setEditForm(f => ({ ...f, planned_reps: e.target.value }))} required />
+                  <input type="text" placeholder="Notes (optional)" value={editForm.notes} onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))} />
+                  <button className="btn-primary" onClick={handleEditSave}>Save</button>
+                  <button className="btn-outline" onClick={() => setEditExerciseDetail(null)}>Cancel</button>
+                </div>
+              </div>
+            )}
             {showAddExercise && (
               <div className="modal-bg">
                 <div className="auth-card" style={{ maxWidth: 400 }}>
                   <h3>Add Exercise</h3>
                   <form onSubmit={handleAddExercise}>
-                    <select value={addExerciseForm.exercise_id} onChange={e => setAddExerciseForm(f => ({ ...f, exercise_id: e.target.value }))} required>
+                    <select value={addExerciseForm.exercise_id} onChange={e => {
+                      const ex = allExercises.find(x => x.exercise_id === Number(e.target.value));
+                      setAddExerciseForm(f => ({
+                        ...f,
+                        exercise_id: e.target.value,
+                        planned_sets: ex?.default_sets?.toString() || '',
+                        planned_reps: ex?.default_reps?.toString() || ''
+                      }));
+                    }} required>
                       <option value="">Select Exercise</option>
                       {allExercises.map(ex => <option key={ex.exercise_id} value={ex.exercise_id}>{ex.name}</option>)}
                     </select>
@@ -269,7 +348,6 @@ const Workouts: React.FC = () => {
                     <input type="number" placeholder="Actual Sets" value={logForm.actual_sets} onChange={e => setLogForm(f => ({ ...f, actual_sets: e.target.value }))} required />
                     <input type="number" placeholder="Actual Reps" value={logForm.actual_reps} onChange={e => setLogForm(f => ({ ...f, actual_reps: e.target.value }))} required />
                     <input type="number" placeholder="Weight (kg)" value={logForm.weight_kg} onChange={e => setLogForm(f => ({ ...f, weight_kg: e.target.value }))} required />
-                    <input type="number" placeholder="Duration (seconds)" value={logForm.duration_seconds} onChange={e => setLogForm(f => ({ ...f, duration_seconds: e.target.value }))} required />
                     <input type="text" placeholder="Notes (optional)" value={logForm.notes} onChange={e => setLogForm(f => ({ ...f, notes: e.target.value }))} />
                     <button className="btn-primary" type="submit">Log</button>
                     <button className="btn-outline" type="button" onClick={() => setShowLogForm(null)}>Cancel</button>

@@ -126,4 +126,44 @@ export const getSessionLogs = async (req: Request, res: Response) => {
   } finally {
     conn.release();
   }
+};
+
+export const deleteSession = async (req: Request, res: Response) => {
+  const { sessionId } = req.params;
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    // Delete logs
+    await conn.query('DELETE el FROM exercise_logs el JOIN session_details sd ON el.session_detail_id = sd.session_detail_id WHERE sd.session_id = ?', [sessionId]);
+    // Delete session details
+    await conn.query('DELETE FROM session_details WHERE session_id = ?', [sessionId]);
+    // Delete session
+    await conn.query('DELETE FROM workout_sessions WHERE session_id = ?', [sessionId]);
+    await conn.commit();
+    res.json({ message: 'Session deleted.' });
+  } catch (err) {
+    await conn.rollback();
+    res.status(500).json({ message: 'Failed to delete session.', error: (err as Error).message });
+  } finally {
+    conn.release();
+  }
+};
+
+export const deleteSessionDetail = async (req: Request, res: Response) => {
+  const { sessionDetailId } = req.params;
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    // Delete logs for this detail
+    await conn.query('DELETE FROM exercise_logs WHERE session_detail_id = ?', [sessionDetailId]);
+    // Delete the session detail
+    await conn.query('DELETE FROM session_details WHERE session_detail_id = ?', [sessionDetailId]);
+    await conn.commit();
+    res.json({ message: 'Exercise deleted from session.' });
+  } catch (err) {
+    await conn.rollback();
+    res.status(500).json({ message: 'Failed to delete exercise from session.', error: (err as Error).message });
+  } finally {
+    conn.release();
+  }
 }; 
