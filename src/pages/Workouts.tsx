@@ -61,6 +61,9 @@ const Workouts: React.FC = () => {
   const [editExerciseDetail, setEditExerciseDetail] = useState<SessionDetail | null>(null);
   const [editForm, setEditForm] = useState({ planned_sets: '', planned_reps: '', notes: '' });
   const [selectedForMove, setSelectedForMove] = useState<number | null>(null);
+  const [deleteLogConfirm, setDeleteLogConfirm] = useState<number | null>(null);
+  const [deleteExerciseConfirm, setDeleteExerciseConfirm] = useState<number | null>(null);
+  const [deleteSessionConfirm, setDeleteSessionConfirm] = useState<number | null>(null);
 
   useEffect(() => {
     if (user) fetchSessions();
@@ -211,23 +214,41 @@ const Workouts: React.FC = () => {
     });
   };
 
-  const handleDeleteSession = async (session_id: number) => {
-    if (!window.confirm('Delete this session and all its data?')) return;
-    await fetch(`http://localhost:4000/api/workouts/${session_id}`, { method: 'DELETE' });
-    fetchSessions();
-    setDetailsModal(null);
+  const handleDeleteSession = (session_id: number) => {
+    setDeleteSessionConfirm(session_id);
   };
 
-  const handleDeleteExercise = async (session_detail_id: number) => {
-    if (!window.confirm('Delete this exercise and its logs?')) return;
-    await fetch(`http://localhost:4000/api/workouts/details/${session_detail_id}`, { method: 'DELETE' });
-    if (detailsModal) openDetails(detailsModal.session);
+  const confirmDeleteSession = async () => {
+    if (deleteSessionConfirm) {
+      await fetch(`http://localhost:4000/api/workouts/${deleteSessionConfirm}`, { method: 'DELETE' });
+      fetchSessions();
+      setDetailsModal(null);
+      setDeleteSessionConfirm(null);
+    }
+  };
+
+  const handleDeleteExercise = (session_detail_id: number) => {
+    setDeleteExerciseConfirm(session_detail_id);
+  };
+
+  const confirmDeleteExercise = async () => {
+    if (deleteExerciseConfirm) {
+      await fetch(`http://localhost:4000/api/workouts/details/${deleteExerciseConfirm}`, { method: 'DELETE' });
+      if (detailsModal) openDetails(detailsModal.session);
+      setDeleteExerciseConfirm(null);
+    }
   };
 
   const handleDeleteLog = async (log_id: number) => {
-    if (!window.confirm('Delete this log entry?')) return;
-    await fetch(`http://localhost:4000/api/workouts/logs/${log_id}`, { method: 'DELETE' });
-    if (detailsModal) openDetails(detailsModal.session);
+    setDeleteLogConfirm(log_id);
+  };
+
+  const confirmDeleteLog = async () => {
+    if (deleteLogConfirm) {
+      await fetch(`http://localhost:4000/api/workouts/logs/${deleteLogConfirm}`, { method: 'DELETE' });
+      if (detailsModal) openDetails(detailsModal.session);
+      setDeleteLogConfirm(null);
+    }
   };
 
   // Add a grid style for columns
@@ -335,6 +356,45 @@ const Workouts: React.FC = () => {
                 <button className="btn-outline" type="button" onClick={() => setShowForm(false)}>Cancel</button>
                 {error && <div className="error">{error}</div>}
               </form>
+            </div>
+          </div>
+        )}
+        {/* Delete session modal at root */}
+        {deleteSessionConfirm && (
+          <div className="modal-bg">
+            <div className="auth-card" style={{ maxWidth: 340, textAlign: 'center' }}>
+              <h3>Delete Session?</h3>
+              <p style={{ margin: '16px 0', color: '#e44' }}>Are you sure you want to delete this session and all its data? This cannot be undone.</p>
+              <div style={{ display: 'flex', gap: 16, justifyContent: 'center', marginTop: 16 }}>
+                <button className="btn-outline" style={{ borderColor: '#e44', color: '#e44', minWidth: 80 }} onClick={confirmDeleteSession}>Delete</button>
+                <button className="btn-outline" style={{ minWidth: 80 }} onClick={() => setDeleteSessionConfirm(null)}>Cancel</button>
+              </div>
+            </div>
+          </div>
+        )}
+        {/* Delete exercise modal at root */}
+        {deleteExerciseConfirm && (
+          <div className="modal-bg">
+            <div className="auth-card" style={{ maxWidth: 340, textAlign: 'center' }}>
+              <h3>Delete Exercise?</h3>
+              <p style={{ margin: '16px 0', color: '#e44' }}>Are you sure you want to delete this exercise and all its logs? This cannot be undone.</p>
+              <div style={{ display: 'flex', gap: 16, justifyContent: 'center', marginTop: 16 }}>
+                <button className="btn-outline" style={{ borderColor: '#e44', color: '#e44', minWidth: 80 }} onClick={confirmDeleteExercise}>Delete</button>
+                <button className="btn-outline" style={{ minWidth: 80 }} onClick={() => setDeleteExerciseConfirm(null)}>Cancel</button>
+              </div>
+            </div>
+          </div>
+        )}
+        {/* Delete log modal at root */}
+        {deleteLogConfirm && (
+          <div className="modal-bg">
+            <div className="auth-card" style={{ maxWidth: 340, textAlign: 'center' }}>
+              <h3>Delete Log Entry?</h3>
+              <p style={{ margin: '16px 0', color: '#e44' }}>Are you sure you want to delete this log entry? This cannot be undone.</p>
+              <div style={{ display: 'flex', gap: 16, justifyContent: 'center', marginTop: 16 }}>
+                <button className="btn-outline" style={{ borderColor: '#e44', color: '#e44', minWidth: 80 }} onClick={confirmDeleteLog}>Delete</button>
+                <button className="btn-outline" style={{ minWidth: 80 }} onClick={() => setDeleteLogConfirm(null)}>Cancel</button>
+              </div>
             </div>
           </div>
         )}
