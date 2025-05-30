@@ -155,7 +155,7 @@ export const getMealDetails = async (req: Request, res: Response) => {
   const conn = await pool.getConnection();
   try {
     const [foods] = await conn.query(
-      `SELECT d.*, f.name, f.calories_per_100g, f.protein_per_100g, f.carbs_per_100g, f.fat_per_100g
+      `SELECT d.*, f.name, f.calories_per_serving, f.protein_per_serving, f.carbs_per_serving, f.fat_per_serving, f.serving_type, f.image
        FROM user_meal_details d
        JOIN foods f ON d.food_id = f.food_id
        WHERE d.meal_id = ?`,
@@ -164,6 +164,24 @@ export const getMealDetails = async (req: Request, res: Response) => {
     res.json(foods);
   } catch (err) {
     res.status(500).json({ message: 'Failed to fetch meal details', error: (err as Error).message });
+  } finally {
+    conn.release();
+  }
+};
+
+// Delete a meal and its details (transactional)
+export const deleteMeal = async (req: Request, res: Response) => {
+  const { mealId } = req.params;
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    await conn.query('DELETE FROM user_meal_details WHERE meal_id = ?', [mealId]);
+    await conn.query('DELETE FROM user_meals WHERE meal_id = ?', [mealId]);
+    await conn.commit();
+    res.json({ message: 'Meal deleted.' });
+  } catch (err) {
+    await conn.rollback();
+    res.status(500).json({ message: 'Failed to delete meal.', error: (err as Error).message });
   } finally {
     conn.release();
   }

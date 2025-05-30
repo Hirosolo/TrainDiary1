@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { addFood, addFoodLog, editFoodLog, deleteFoodLog, getFoods, createMeal, getMeals, getMealDetails } from '../controllers/foodController';
+import { addFood, addFoodLog, editFoodLog, deleteFoodLog, getFoods, createMeal, getMeals, getMealDetails, deleteMeal } from '../controllers/foodController';
 
 const router = Router();
 
@@ -11,5 +11,6 @@ router.get('/', getFoods);
 router.post('/meals', createMeal);
 router.get('/meals', getMeals);
 router.get('/meals/:mealId', getMealDetails);
+router.delete('/meals/:mealId', deleteMeal);
 
 export default router; 

@@ -109,4 +109,14 @@ export const applyPlan = (data: any) =>
     method: 'POST',
     headers: getHeaders(),
     body: JSON.stringify(data),
+  }).then(res => res.json());
+
+export const getMeals = (user_id: number) =>
+  fetch(`${API_URL}/foods/meals?user_id=${user_id}`, {
+    headers: getHeaders(),
+  }).then(res => res.json());
+
+export const getSessions = (user_id: number) =>
+  fetch(`${API_URL}/workouts?user_id=${user_id}`, {
+    headers: getHeaders(),
   }).then(res => res.json()); 

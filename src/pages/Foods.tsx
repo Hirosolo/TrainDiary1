@@ -12,10 +12,12 @@ interface MealFood {
   food_id: number;
   name: string;
   amount_grams: number;
-  calories_per_100g: number;
-  protein_per_100g: number;
-  carbs_per_100g: number;
-  fat_per_100g: number;
+  calories_per_serving: number;
+  protein_per_serving: number;
+  carbs_per_serving: number;
+  fat_per_serving: number;
+  serving_type: string;
+  image?: string;
 }
 interface Food {
   food_id: number;
@@ -43,6 +45,7 @@ const Foods: React.FC = () => {
   const [error, setError] = useState('');
   const [expandedMeal, setExpandedMeal] = useState<number | null>(null);
   const [mealDetails, setMealDetails] = useState<MealFood[]>([]);
+  const [deleteMealId, setDeleteMealId] = useState<number | null>(null);
 
   useEffect(() => {
     if (user) fetchMeals();
@@ -121,6 +124,23 @@ const Foods: React.FC = () => {
     setMealDetails(data);
   };
 
+  const formatDate = (dateStr: string) => {
+    const d = new Date(dateStr);
+    return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  };
+
+  const handleDeleteMeal = (meal_id: number) => {
+    setDeleteMealId(meal_id);
+  };
+
+  const confirmDeleteMeal = async () => {
+    if (deleteMealId) {
+      await fetch(`http://localhost:4000/api/foods/meals/${deleteMealId}`, { method: 'DELETE' });
+      setDeleteMealId(null);
+      fetchMeals();
+    }
+  };
+
   return (
     <div className="dashboard-bg">
       <Navbar />
@@ -129,10 +149,11 @@ const Foods: React.FC = () => {
         <div className="dashboard-cards">
           {loading ? <div>Loading...</div> : meals.length === 0 ? <div>No meals yet.</div> : meals.map(meal => (
             <div className="dashboard-card" key={meal.meal_id}>
-              <h3>{meal.meal_type.charAt(0).toUpperCase() + meal.meal_type.slice(1)} - {meal.log_date}</h3>
+              <h3>{meal.meal_type.charAt(0).toUpperCase() + meal.meal_type.slice(1)} - {formatDate(meal.log_date)}</h3>
               <button className="btn-outline" onClick={() => handleExpandMeal(meal.meal_id)}>
                 {expandedMeal === meal.meal_id ? 'Hide Details' : 'View Details'}
               </button>
+              <button className="btn-outline" style={{ marginLeft: 8, borderColor: '#e44', color: '#e44' }} onClick={() => handleDeleteMeal(meal.meal_id)}>Delete</button>
               {expandedMeal === meal.meal_id && (
                 <div style={{ marginTop: 16 }}>
                   {mealDetails.length === 0 ? <div>No foods in this meal.</div> : (
@@ -140,11 +161,13 @@ const Foods: React.FC = () => {
                       <thead>
                         <tr>
                           <th>Food</th>
-                          <th>Amount (g)</th>
+                          <th>Amount (servings)</th>
+                          <th>Serving Type</th>
                           <th>Calories</th>
                           <th>Protein</th>
                           <th>Carbs</th>
                           <th>Fat</th>
+                          <th>Image</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -152,10 +175,12 @@ const Foods: React.FC = () => {
                           <tr key={f.food_id}>
                             <td>{f.name}</td>
                             <td>{f.amount_grams}</td>
-                            <td>{((f.calories_per_100g * f.amount_grams) / 100).toFixed(1)}</td>
-                            <td>{((f.protein_per_100g * f.amount_grams) / 100).toFixed(1)}</td>
-                            <td>{((f.carbs_per_100g * f.amount_grams) / 100).toFixed(1)}</td>
-                            <td>{((f.fat_per_100g * f.amount_grams) / 100).toFixed(1)}</td>
+                            <td>{f.serving_type}</td>
+                            <td>{((f.calories_per_serving * f.amount_grams)).toFixed(1)}</td>
+                            <td>{((f.protein_per_serving * f.amount_grams)).toFixed(1)}</td>
+                            <td>{((f.carbs_per_serving * f.amount_grams)).toFixed(1)}</td>
+                            <td>{((f.fat_per_serving * f.amount_grams)).toFixed(1)}</td>
+                            <td>{f.image ? <img src={`/Assest/${f.image}`} alt={f.name} style={{ width: 32, height: 32, objectFit: 'cover', borderRadius: 4 }} /> : null}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -283,6 +308,18 @@ const Foods: React.FC = () => {
                 </div>
               )}
               <button className="btn-outline" type="button" onClick={() => setShowFoodModal(false)}>Cancel</button>
+            </div>
+          </div>
+        )}
+        {deleteMealId && (
+          <div className="modal-bg">
+            <div className="auth-card" style={{ maxWidth: 340, textAlign: 'center' }}>
+              <h3>Delete Meal?</h3>
+              <p style={{ margin: '16px 0', color: '#e44' }}>Are you sure you want to delete this meal and all its data? This cannot be undone.</p>
+              <div style={{ display: 'flex', gap: 16, justifyContent: 'center', marginTop: 16 }}>
+                <button className="btn-outline" style={{ borderColor: '#e44', color: '#e44', minWidth: 80 }} onClick={confirmDeleteMeal}>Delete</button>
+                <button className="btn-outline" style={{ minWidth: 80 }} onClick={() => setDeleteMealId(null)}>Cancel</button>
+              </div>
             </div>
           </div>
         )}

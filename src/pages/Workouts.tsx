@@ -131,6 +131,7 @@ const Workouts: React.FC = () => {
       setFormNotes('');
       setFormType(sessionTypes[0]);
       fetchSessions();
+      if (user) await summaryStore.refreshSummary(user.user_id);
     } else {
       setError(res.message || 'Failed to schedule session');
     }
@@ -186,6 +187,7 @@ const Workouts: React.FC = () => {
       setShowLogForm(null);
       setLogForm({ actual_sets: '', actual_reps: '', weight_kg: '', notes: '' });
       openDetails(detailsModal!.session);
+      if (user) await summaryStore.refreshSummary(user.user_id);
     } else {
       setLogError(data.message || 'Failed to log workout');
     }
@@ -258,6 +260,7 @@ const Workouts: React.FC = () => {
       fetchSessions();
       setDetailsModal(null);
       setDeleteSessionConfirm(null);
+      if (user) await summaryStore.refreshSummary(user.user_id);
     }
   };
 
