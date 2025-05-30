@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import * as api from '../api';
 import { DragDropContext, Draggable, DropResult, DroppableProvided, DraggableProvided } from '@hello-pangea/dnd';
 import { StrictModeDroppable } from '../components/StrictModeDroppable';
+import FlipMove from 'react-flip-move';
 
 interface Session {
   session_id: number;
@@ -352,70 +353,72 @@ const Workouts: React.FC = () => {
                 <div style={{ ...cellStyle, textAlign: 'center' }}>Actions</div>
               </div>
               <div style={{ width: '100%', maxWidth: 1400, margin: '0 auto' }}>
-                {sessionDetails.map((detail, idx) => {
-                  const log = sessionLogs.find(l => l.session_detail_id === detail.session_detail_id);
-                  const isSelected = selectedForMove === idx;
-                  return (
-                    <div
-                      key={detail.session_detail_id}
-                      style={{
-                        ...exerciseBlockStyle,
-                        width: '100%',
-                        boxSizing: 'border-box',
-                        border: isSelected ? '2px solid #e66' : 'none',
-                        background: isSelected ? '#29292c' : exerciseBlockStyle.background,
-                        marginBottom: 18,
-                        boxShadow: '0 2px 8px 0 #0002',
-                      }}
-                    >
-                      {/* Plan row */}
-                      <div style={{ ...exerciseGrid, background: 'transparent', borderRadius: '8px 8px 0 0', borderBottom: '1px solid #29292c' }}>
-                        <div style={dragHandleStyle}>
-                          <button
-                            style={{
-                              background: isSelected ? '#e66' : 'transparent',
-                              color: isSelected ? '#fff' : '#888',
-                              border: 'none',
-                              fontSize: 18,
-                              cursor: 'pointer',
-                              width: 28,
-                              height: 28,
-                              borderRadius: 4,
-                            }}
-                            title={selectedForMove === null ? 'Select to move' : isSelected ? 'Cancel move' : 'Move here'}
-                            onClick={() => handleReorderClick(idx)}
-                          >↕</button>
+                <FlipMove duration={350} easing="ease-in-out">
+                  {sessionDetails.map((detail, idx) => {
+                    const log = sessionLogs.find(l => l.session_detail_id === detail.session_detail_id);
+                    const isSelected = selectedForMove === idx;
+                    return (
+                      <div
+                        key={detail.session_detail_id}
+                        style={{
+                          ...exerciseBlockStyle,
+                          width: '100%',
+                          boxSizing: 'border-box',
+                          border: isSelected ? '2px solid #e66' : 'none',
+                          background: isSelected ? '#29292c' : exerciseBlockStyle.background,
+                          marginBottom: 18,
+                          boxShadow: '0 2px 8px 0 #0002',
+                        }}
+                      >
+                        {/* Plan row */}
+                        <div style={{ ...exerciseGrid, background: 'transparent', borderRadius: '8px 8px 0 0', borderBottom: '1px solid #29292c' }}>
+                          <div style={dragHandleStyle}>
+                            <button
+                              style={{
+                                background: isSelected ? '#e66' : 'transparent',
+                                color: isSelected ? '#fff' : '#888',
+                                border: 'none',
+                                fontSize: 18,
+                                cursor: 'pointer',
+                                width: 28,
+                                height: 28,
+                                borderRadius: 4,
+                              }}
+                              title={selectedForMove === null ? 'Select to move' : isSelected ? 'Cancel move' : 'Move here'}
+                              onClick={() => handleReorderClick(idx)}
+                            >↕</button>
+                          </div>
+                          <div style={{ ...cellStyle, fontWeight: 600, color: '#e66' }}>Plan</div>
+                          <div style={{ ...cellStyle, fontWeight: 700 }}>{detail.name}</div>
+                          <div style={cellStyle}>{detail.planned_sets}</div>
+                          <div style={cellStyle}>{detail.planned_reps}</div>
+                          <div style={cellStyle}></div>
+                          <div style={cellStyle}>{detail.description}</div>
+                          <div style={actionCol}>
+                            <button style={btnEdit} className="btn-outline" onMouseOver={e => e.currentTarget.style.background = '#36c1'} onMouseOut={e => e.currentTarget.style.background = 'transparent'} onClick={() => handleEditClick(detail)}>Edit</button>
+                            <button style={btnDelete} className="btn-outline" onMouseOver={e => e.currentTarget.style.background = '#e441'} onMouseOut={e => e.currentTarget.style.background = 'transparent'} onClick={() => handleDeleteExercise(detail.session_detail_id)}>Delete</button>
+                            <button style={btnLog} className="btn-outline" onMouseOver={e => e.currentTarget.style.background = '#aaa2'} onMouseOut={e => e.currentTarget.style.background = 'transparent'} onClick={() => { setShowLogForm(detail.session_detail_id); setLogForm({ actual_sets: '', actual_reps: '', weight_kg: '', notes: '' }); }}>Log</button>
+                          </div>
                         </div>
-                        <div style={{ ...cellStyle, fontWeight: 600, color: '#e66' }}>Plan</div>
-                        <div style={{ ...cellStyle, fontWeight: 700 }}>{detail.name}</div>
-                        <div style={cellStyle}>{detail.planned_sets}</div>
-                        <div style={cellStyle}>{detail.planned_reps}</div>
-                        <div style={cellStyle}></div>
-                        <div style={cellStyle}>{detail.description}</div>
-                        <div style={actionCol}>
-                          <button style={btnEdit} className="btn-outline" onMouseOver={e => e.currentTarget.style.background = '#36c1'} onMouseOut={e => e.currentTarget.style.background = 'transparent'} onClick={() => handleEditClick(detail)}>Edit</button>
-                          <button style={btnDelete} className="btn-outline" onMouseOver={e => e.currentTarget.style.background = '#e441'} onMouseOut={e => e.currentTarget.style.background = 'transparent'} onClick={() => handleDeleteExercise(detail.session_detail_id)}>Delete</button>
-                          <button style={btnLog} className="btn-outline" onMouseOver={e => e.currentTarget.style.background = '#aaa2'} onMouseOut={e => e.currentTarget.style.background = 'transparent'} onClick={() => { setShowLogForm(detail.session_detail_id); setLogForm({ actual_sets: '', actual_reps: '', weight_kg: '', notes: '' }); }}>Log</button>
+                        {/* Actual row */}
+                        <div style={{ ...exerciseGrid, background: 'transparent', borderRadius: '0 0 8px 8px', marginTop: 6 }}>
+                          <div style={dragHandleStyle}></div>
+                          <div style={{ ...cellStyle, fontWeight: 600, color: '#6e6' }}>Actual</div>
+                          <div style={{ ...cellStyle, fontWeight: 700 }}>{detail.name}</div>
+                          <div style={cellStyle}>{log ? log.actual_sets : ''}</div>
+                          <div style={cellStyle}>{log ? log.actual_reps : ''}</div>
+                          <div style={cellStyle}>{log ? `${log.weight_kg} kg` : ''}</div>
+                          <div style={cellStyle}>{log ? log.notes : ''}</div>
+                          <div style={actionCol}>
+                            <button style={btnEdit} className="btn-outline" onMouseOver={e => e.currentTarget.style.background = '#36c1'} onMouseOut={e => e.currentTarget.style.background = 'transparent'} onClick={() => handleEditClick(detail)}>Edit</button>
+                            <button style={btnDelete} className="btn-outline" onMouseOver={e => e.currentTarget.style.background = '#e441'} onMouseOut={e => e.currentTarget.style.background = 'transparent'} onClick={() => handleDeleteExercise(detail.session_detail_id)}>Delete</button>
+                            {/* No Log button in Actual row */}
+                          </div>
                         </div>
                       </div>
-                      {/* Actual row */}
-                      <div style={{ ...exerciseGrid, background: 'transparent', borderRadius: '0 0 8px 8px', marginTop: 6 }}>
-                        <div style={dragHandleStyle}></div>
-                        <div style={{ ...cellStyle, fontWeight: 600, color: '#6e6' }}>Actual</div>
-                        <div style={{ ...cellStyle, fontWeight: 700 }}>{detail.name}</div>
-                        <div style={cellStyle}>{log ? log.actual_sets : ''}</div>
-                        <div style={cellStyle}>{log ? log.actual_reps : ''}</div>
-                        <div style={cellStyle}>{log ? `${log.weight_kg} kg` : ''}</div>
-                        <div style={cellStyle}>{log ? log.notes : ''}</div>
-                        <div style={actionCol}>
-                          <button style={btnEdit} className="btn-outline" onMouseOver={e => e.currentTarget.style.background = '#36c1'} onMouseOut={e => e.currentTarget.style.background = 'transparent'} onClick={() => handleEditClick(detail)}>Edit</button>
-                          <button style={btnDelete} className="btn-outline" onMouseOver={e => e.currentTarget.style.background = '#e441'} onMouseOut={e => e.currentTarget.style.background = 'transparent'} onClick={() => handleDeleteExercise(detail.session_detail_id)}>Delete</button>
-                          {/* No Log button in Actual row */}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </FlipMove>
               </div>
               <button className="btn-primary" style={{ marginBottom: 16 }} onClick={() => { setShowAddExercise(true); fetchAllExercises(); }}>Add Exercise</button>
               <button className="btn-outline" style={{ marginTop: 16 }} onClick={() => setDetailsModal(null)}>Close</button>
