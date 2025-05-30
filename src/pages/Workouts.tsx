@@ -11,6 +11,7 @@ interface Session {
   scheduled_date: string;
   completed: boolean;
   notes: string;
+  type?: string;
 }
 interface SessionDetail {
   session_detail_id: number;
@@ -40,6 +41,29 @@ interface Exercise {
   description?: string;
 }
 
+const sessionTypes = [
+  'Push',
+  'Pull',
+  'Legs',
+  'Arms + Back',
+  'Full Body',
+  'Cardio',
+  'Upper',
+  'Lower',
+  'Chest',
+  'Back',
+  'Shoulders',
+  'Arms',
+  'Core / Abs',
+  'Push + Pull',
+  'Chest + Triceps',
+  'Back + Biceps',
+  'Legs + Shoulders',
+  'Functional Training',
+  'Full Body + Cardio',
+  'Custom',
+];
+
 const Workouts: React.FC = () => {
   const { user } = useAuth();
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -64,6 +88,7 @@ const Workouts: React.FC = () => {
   const [deleteLogConfirm, setDeleteLogConfirm] = useState<number | null>(null);
   const [deleteExerciseConfirm, setDeleteExerciseConfirm] = useState<number | null>(null);
   const [deleteSessionConfirm, setDeleteSessionConfirm] = useState<number | null>(null);
+  const [formType, setFormType] = useState(sessionTypes[0]);
 
   useEffect(() => {
     if (user) fetchSessions();
@@ -91,11 +116,12 @@ const Workouts: React.FC = () => {
   const handleSchedule = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    const res = await api.createSession({ user_id: user?.user_id, scheduled_date: formDate, notes: formNotes });
+    const res = await api.createSession({ user_id: user?.user_id, scheduled_date: formDate, notes: formNotes, type: formType });
     if (res.session_id) {
       setShowForm(false);
       setFormDate('');
       setFormNotes('');
+      setFormType(sessionTypes[0]);
       fetchSessions();
     } else {
       setError(res.message || 'Failed to schedule session');
@@ -335,6 +361,7 @@ const Workouts: React.FC = () => {
             <div className="dashboard-card" key={session.session_id}>
               <h3>Session #{session.session_id}</h3>
               <div className="dashboard-value">Date: {formatDate(session.scheduled_date)}</div>
+              <div className="dashboard-value">Type: {session.type || '-'}</div>
               <div className="dashboard-value">Notes: {session.notes || '-'}</div>
               <div className="dashboard-value">Completed: {session.completed ? 'Yes' : 'No'}</div>
               <button className="btn-primary" onClick={() => openDetails(session)}>View Details</button>
@@ -351,6 +378,9 @@ const Workouts: React.FC = () => {
               <h3>Schedule Workout Session</h3>
               <form onSubmit={handleSchedule}>
                 <input type="date" value={formDate} onChange={e => setFormDate(e.target.value)} required />
+                <select value={formType} onChange={e => setFormType(e.target.value)} required>
+                  {sessionTypes.map(type => <option key={type} value={type}>{type}</option>)}
+                </select>
                 <input type="text" value={formNotes} onChange={e => setFormNotes(e.target.value)} placeholder="Notes (optional)" />
                 <button className="btn-primary" type="submit" disabled={!formDate}>Create</button>
                 <button className="btn-outline" type="button" onClick={() => setShowForm(false)}>Cancel</button>
@@ -403,6 +433,7 @@ const Workouts: React.FC = () => {
             <div className="auth-card" style={{ maxWidth: '1400px', minWidth: 700, textAlign: 'left' }}>
               <h3>Session Details</h3>
               <div><b>Date:</b> {formatDate(detailsModal.session.scheduled_date)}</div>
+              <div><b>Type:</b> {detailsModal.session.type || '-'}</div>
               <div><b>Notes:</b> {detailsModal.session.notes || '-'}</div>
               <div><b>Completed:</b> {detailsModal.session.completed ? 'Yes' : 'No'}</div>
               <div style={{ margin: '18px 0 8px 0', fontWeight: 600 }}>

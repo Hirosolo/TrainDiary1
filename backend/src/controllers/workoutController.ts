@@ -3,7 +3,7 @@ import pool from '../utils/db';
 
 // Create a workout session
 export const createSession = async (req: Request, res: Response) => {
-  const { user_id, scheduled_date, notes } = req.body;
+  const { user_id, scheduled_date, notes, type } = req.body;
   if (!user_id || !scheduled_date) {
     return res.status(400).json({ message: 'user_id and scheduled_date are required.' });
   }
@@ -11,8 +11,8 @@ export const createSession = async (req: Request, res: Response) => {
   try {
     await conn.beginTransaction();
     const [result] = await conn.query(
-      'INSERT INTO workout_sessions (user_id, scheduled_date, notes) VALUES (?, ?, ?)',
-      [user_id, scheduled_date, notes || null]
+      'INSERT INTO workout_sessions (user_id, scheduled_date, type, notes) VALUES (?, ?, ?, ?)',
+      [user_id, scheduled_date, type || null, notes || null]
     );
     await conn.commit();
     res.status(201).json({ session_id: (result as any).insertId });
