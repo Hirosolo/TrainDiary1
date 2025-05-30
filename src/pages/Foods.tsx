@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import Navbar from '../components/NavBar/NavBar';
 import { useAuth } from '../context/AuthContext';
 import * as api from '../api';
+import { useDashboardRefresh } from '../context/DashboardRefreshContext';
 
 interface Meal {
   meal_id: number;
@@ -46,6 +47,7 @@ const Foods: React.FC = () => {
   const [expandedMeal, setExpandedMeal] = useState<number | null>(null);
   const [mealDetails, setMealDetails] = useState<MealFood[]>([]);
   const [deleteMealId, setDeleteMealId] = useState<number | null>(null);
+  const { triggerRefresh } = useDashboardRefresh();
 
   useEffect(() => {
     if (user) fetchMeals();
@@ -107,6 +109,7 @@ const Foods: React.FC = () => {
       setForm({ log_date: '', meal_type: 'breakfast' });
       setMealFoods([]);
       fetchMeals();
+      triggerRefresh();
     } else {
       setError(data.message || 'Failed to log meal');
     }
@@ -138,6 +141,7 @@ const Foods: React.FC = () => {
       await fetch(`http://localhost:4000/api/foods/meals/${deleteMealId}`, { method: 'DELETE' });
       setDeleteMealId(null);
       fetchMeals();
+      triggerRefresh();
     }
   };
 

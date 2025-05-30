@@ -51,9 +51,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const t = localStorage.getItem('token');
     const u = localStorage.getItem('user');
     if (t && u) {
-      setTokenState(t);
-      setUser(JSON.parse(u));
-      api.setToken(t);
+      try {
+        const parsedUser = typeof u === 'string' ? JSON.parse(u) : u;
+        if (parsedUser && parsedUser.user_id && parsedUser.email) {
+          setTokenState(t);
+          setUser(parsedUser);
+          api.setToken(t);
+        } else {
+          // fallback: clear invalid user
+          setUser(null);
+          setTokenState(null);
+          api.setToken('');
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+        }
+      } catch {
+        setUser(null);
+        setTokenState(null);
+        api.setToken('');
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+      }
     }
     setLoading(false);
   }, []);

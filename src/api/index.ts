@@ -1,6 +1,6 @@
 const API_URL = 'http://localhost:4000/api';
 
-let token: string | null = null;
+let token: string | null = localStorage.getItem('token');
 
 export const setToken = (newToken: string) => {
   token = newToken;
@@ -8,7 +8,7 @@ export const setToken = (newToken: string) => {
 
 const getHeaders = (isJson = true) => ({
   ...(isJson ? { 'Content-Type': 'application/json' } : {}),
-  ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  ...((token || localStorage.getItem('token')) ? { Authorization: `Bearer ${token || localStorage.getItem('token')}` } : {}),
 });
 
 // Auth

@@ -6,9 +6,9 @@ import { DragDropContext, Draggable, DropResult, DroppableProvided, DraggablePro
 import { StrictModeDroppable } from '../components/StrictModeDroppable';
 import FlipMove from 'react-flip-move';
 import { getSummary, generateSummary } from '../api';
-import { externalRefresh as dashboardExternalRefresh } from './Dashboard';
 import { useSummaryStore } from '../context/SummaryStore';
 import { Navigate } from 'react-router-dom';
+import { useDashboardRefresh } from '../context/DashboardRefreshContext';
 
 interface Session {
   session_id: number;
@@ -70,6 +70,7 @@ const sessionTypes = [
 
 const Workouts: React.FC = () => {
   const { user, loading: authLoading } = useAuth();
+  const { triggerRefresh } = useDashboardRefresh();
   if (authLoading) return <div className="dashboard-container">Loading user...</div>;
   if (!user) return <Navigate to="/login" replace />;
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -131,7 +132,7 @@ const Workouts: React.FC = () => {
       setFormNotes('');
       setFormType(sessionTypes[0]);
       fetchSessions();
-      if (user) await summaryStore.refreshSummary(user.user_id);
+      triggerRefresh();
     } else {
       setError(res.message || 'Failed to schedule session');
     }
@@ -187,7 +188,7 @@ const Workouts: React.FC = () => {
       setShowLogForm(null);
       setLogForm({ actual_sets: '', actual_reps: '', weight_kg: '', notes: '' });
       openDetails(detailsModal!.session);
-      if (user) await summaryStore.refreshSummary(user.user_id);
+      triggerRefresh();
     } else {
       setLogError(data.message || 'Failed to log workout');
     }
@@ -260,7 +261,7 @@ const Workouts: React.FC = () => {
       fetchSessions();
       setDetailsModal(null);
       setDeleteSessionConfirm(null);
-      if (user) await summaryStore.refreshSummary(user.user_id);
+      triggerRefresh();
     }
   };
 
