@@ -48,6 +48,12 @@ export const logWorkout = (data: any) =>
     body: JSON.stringify(data),
   }).then(res => res.json());
 
+export const markSessionCompleted = (sessionId: number) =>
+  fetch(`${API_URL}/workouts/${sessionId}/complete`, {
+    method: 'PATCH',
+    headers: getHeaders(),
+  }).then(res => res.json());
+
 // Foods
 export const addFood = (data: any) =>
   fetch(`${API_URL}/foods`, {

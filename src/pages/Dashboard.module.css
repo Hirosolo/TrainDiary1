@@ -1,1 +1,85 @@
- 
+.dashboard-bg {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #18181b 0%, #232326 100%);
+  color: #fff;
+}
+
+.dashboard-content {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 40px 24px 24px 24px;
+}
+
+.dashboard-title {
+  font-size: 2.2rem;
+  font-weight: 700;
+  margin-bottom: 32px;
+  letter-spacing: 0.5px;
+  color: #fff;
+}
+
+.dashboard-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 32px;
+  margin-bottom: 40px;
+}
+
+.dashboard-card {
+  background: rgba(36, 37, 42, 0.85);
+  border-radius: 18px;
+  box-shadow: 0 4px 32px 0 #0004;
+  padding: 32px 24px 24px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  transition: box-shadow 0.2s, background 0.2s;
+  border: 1.5px solid rgba(255,255,255,0.06);
+  backdrop-filter: blur(8px);
+}
+
+.dashboard-card h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: #e66;
+  letter-spacing: 0.2px;
+}
+
+.dashboard-value {
+  font-size: 2.1rem;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 1px;
+  margin-bottom: 2px;
+  text-shadow: 0 2px 8px #0006;
+}
+
+.dashboard-cta {
+  display: flex;
+  gap: 18px;
+  margin-top: 16px;
+}
+
+@media (max-width: 700px) {
+  .dashboard-content {
+    padding: 18px 4vw 12vw 4vw;
+  }
+  .dashboard-title {
+    font-size: 1.3rem;
+    margin-bottom: 18px;
+  }
+  .dashboard-cards {
+    gap: 16px;
+  }
+  .dashboard-card {
+    padding: 18px 10px 14px 10px;
+  }
+  .dashboard-value {
+    font-size: 1.2rem;
+  }
+  .dashboard-cta {
+    flex-direction: column;
+    gap: 10px;
+  }
+} 

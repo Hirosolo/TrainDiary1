@@ -179,4 +179,30 @@ export const deleteLog = async (req: Request, res: Response) => {
   } finally {
     conn.release();
   }
+};
+
+export const markSessionCompleted = async (req: Request, res: Response) => {
+  const { sessionId } = req.params;
+  const conn = await pool.getConnection();
+  try {
+    // Get all session_details for this session
+    const [details] = await conn.query('SELECT session_detail_id FROM session_details WHERE session_id = ?', [sessionId]);
+    if ((details as any[]).length === 0) {
+      return res.status(400).json({ message: 'No exercises in this session.' });
+    }
+    // For each detail, check if there is at least one log
+    for (const detail of details as any[]) {
+      const [logs] = await conn.query('SELECT 1 FROM exercise_logs WHERE session_detail_id = ? LIMIT 1', [detail.session_detail_id]);
+      if ((logs as any[]).length === 0) {
+        return res.status(400).json({ message: 'All exercises must have at least one log.' });
+      }
+    }
+    // All exercises have at least one log, mark session as completed
+    await conn.query('UPDATE workout_sessions SET completed = 1 WHERE session_id = ?', [sessionId]);
+    res.json({ message: 'Session marked as completed.' });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to mark session as completed.', error: (err as Error).message });
+  } finally {
+    conn.release();
+  }
 }; 

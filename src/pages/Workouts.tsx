@@ -89,6 +89,7 @@ const Workouts: React.FC = () => {
   const [deleteExerciseConfirm, setDeleteExerciseConfirm] = useState<number | null>(null);
   const [deleteSessionConfirm, setDeleteSessionConfirm] = useState<number | null>(null);
   const [formType, setFormType] = useState(sessionTypes[0]);
+  const [completeError, setCompleteError] = useState('');
 
   useEffect(() => {
     if (user) fetchSessions();
@@ -277,6 +278,25 @@ const Workouts: React.FC = () => {
     }
   };
 
+  const canMarkCompleted =
+    detailsModal?.session &&
+    !detailsModal.session.completed &&
+    sessionDetails.length > 0 &&
+    sessionDetails.every(detail => sessionLogs.some(log => log.session_detail_id === detail.session_detail_id));
+
+  const handleMarkCompleted = async () => {
+    if (!detailsModal) return;
+    setCompleteError('');
+    const res = await api.markSessionCompleted(detailsModal.session.session_id);
+    if (res.message === 'Session marked as completed.') {
+      // Refresh session list and details
+      fetchSessions();
+      openDetails({ ...detailsModal.session, completed: true });
+    } else {
+      setCompleteError(res.message || 'Failed to mark as completed');
+    }
+  };
+
   // Add a grid style for columns
   const exerciseGrid = {
     display: 'grid',
@@ -436,6 +456,10 @@ const Workouts: React.FC = () => {
               <div><b>Type:</b> {detailsModal.session.type || '-'}</div>
               <div><b>Notes:</b> {detailsModal.session.notes || '-'}</div>
               <div><b>Completed:</b> {detailsModal.session.completed ? 'Yes' : 'No'}</div>
+              {canMarkCompleted && (
+                <button className="btn-primary" style={{ margin: '16px 0 0 0' }} onClick={handleMarkCompleted}>Mark as Completed</button>
+              )}
+              {completeError && <div className="error" style={{ marginTop: 8 }}>{completeError}</div>}
               <div style={{ margin: '18px 0 8px 0', fontWeight: 600 }}>
                 Exercises:
               </div>
