@@ -88,7 +88,7 @@ export const deleteFoodLog = async (req: Request, res: Response) => {
 export const getFoods = async (req: Request, res: Response) => {
   const conn = await pool.getConnection();
   try {
-    const [rows] = await conn.query('SELECT * FROM foods ORDER BY name ASC');
+    const [rows] = await conn.query('SELECT food_id, name, calories_per_serving, protein_per_serving, carbs_per_serving, fat_per_serving, serving_type, image FROM foods ORDER BY name ASC');
     res.json(rows);
   } catch (err) {
     res.status(500).json({ message: 'Failed to fetch foods', error: (err as Error).message });

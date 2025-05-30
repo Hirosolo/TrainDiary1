@@ -3,21 +3,27 @@ import { useAuth } from '../context/AuthContext';
 import { getSummary } from '../api';
 import Navbar from '../components/NavBar/NavBar';
 import styles from './Dashboard.module.css';
+import { useSummaryStore } from '../context/SummaryStore';
+import { Navigate } from 'react-router-dom';
+
+let externalRefresh: (() => void) | null = null;
 
 const Dashboard: React.FC = () => {
-  const { user } = useAuth();
-  const [summary, setSummary] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const { user, loading: authLoading } = useAuth();
+  const summary = useSummaryStore((s: any) => s.summary);
+  const loading = useSummaryStore((s: any) => s.loading);
+  const refreshSummary = useSummaryStore((s: any) => s.refreshSummary);
 
-  useEffect(() => {
-    if (user) {
-      getSummary({ user_id: user.user_id, period_type: 'weekly', period_start: new Date().toISOString().slice(0, 10) })
-        .then(setSummary)
-        .finally(() => setLoading(false));
-    }
-  }, [user]);
+  console.log('Dashboard state:', { user, authLoading, summary, loading });
 
+  React.useEffect(() => {
+    if (user && !authLoading) refreshSummary(user.user_id);
+  }, [user, authLoading, refreshSummary]);
+
+  if (authLoading) return <div className="dashboard-container">Loading user...</div>;
+  if (!user) return <Navigate to="/login" replace />;
   if (loading) return <div className="dashboard-container">Loading summary...</div>;
+  if (!summary) return <div className="dashboard-container">No summary data available. Please log a workout or meal.</div>;
 
   return (
     <div className={styles['dashboard-bg']}>
@@ -55,4 +61,5 @@ const Dashboard: React.FC = () => {
   );
 };
 
+export { externalRefresh };
 export default Dashboard; 

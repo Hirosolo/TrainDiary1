@@ -5,6 +5,10 @@ import * as api from '../api';
 import { DragDropContext, Draggable, DropResult, DroppableProvided, DraggableProvided } from '@hello-pangea/dnd';
 import { StrictModeDroppable } from '../components/StrictModeDroppable';
 import FlipMove from 'react-flip-move';
+import { getSummary, generateSummary } from '../api';
+import { externalRefresh as dashboardExternalRefresh } from './Dashboard';
+import { useSummaryStore } from '../context/SummaryStore';
+import { Navigate } from 'react-router-dom';
 
 interface Session {
   session_id: number;
@@ -65,7 +69,9 @@ const sessionTypes = [
 ];
 
 const Workouts: React.FC = () => {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
+  if (authLoading) return <div className="dashboard-container">Loading user...</div>;
+  if (!user) return <Navigate to="/login" replace />;
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -90,11 +96,12 @@ const Workouts: React.FC = () => {
   const [deleteSessionConfirm, setDeleteSessionConfirm] = useState<number | null>(null);
   const [formType, setFormType] = useState(sessionTypes[0]);
   const [completeError, setCompleteError] = useState('');
+  const summaryStore = useSummaryStore.getState();
 
   useEffect(() => {
-    if (user) fetchSessions();
+    if (user && !authLoading) fetchSessions();
     // eslint-disable-next-line
-  }, [user]);
+  }, [user, authLoading]);
 
   const fetchSessions = async () => {
     setLoading(true);
@@ -292,6 +299,10 @@ const Workouts: React.FC = () => {
       // Refresh session list and details
       fetchSessions();
       openDetails({ ...detailsModal.session, completed: true });
+      // Regenerate summary for the current week and update global state
+      if (user) {
+        await summaryStore.refreshSummary(user.user_id);
+      }
     } else {
       setCompleteError(res.message || 'Failed to mark as completed');
     }

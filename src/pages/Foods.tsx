@@ -20,10 +20,12 @@ interface MealFood {
 interface Food {
   food_id: number;
   name: string;
-  calories_per_100g: number;
-  protein_per_100g: number;
-  carbs_per_100g: number;
-  fat_per_100g: number;
+  calories_per_serving: number;
+  protein_per_serving: number;
+  carbs_per_serving: number;
+  fat_per_serving: number;
+  serving_type: string;
+  image?: string;
 }
 
 const Foods: React.FC = () => {
@@ -200,10 +202,10 @@ const Foods: React.FC = () => {
                           <tr key={i}>
                             <td>{f.food.name}</td>
                             <td>{f.amount_grams}</td>
-                            <td>{((f.food.calories_per_100g * Number(f.amount_grams)) / 100).toFixed(1)}</td>
-                            <td>{((f.food.protein_per_100g * Number(f.amount_grams)) / 100).toFixed(1)}</td>
-                            <td>{((f.food.carbs_per_100g * Number(f.amount_grams)) / 100).toFixed(1)}</td>
-                            <td>{((f.food.fat_per_100g * Number(f.amount_grams)) / 100).toFixed(1)}</td>
+                            <td>{((f.food.calories_per_serving * Number(f.amount_grams)) / 100).toFixed(1)}</td>
+                            <td>{((f.food.protein_per_serving * Number(f.amount_grams)) / 100).toFixed(1)}</td>
+                            <td>{((f.food.carbs_per_serving * Number(f.amount_grams)) / 100).toFixed(1)}</td>
+                            <td>{((f.food.fat_per_serving * Number(f.amount_grams)) / 100).toFixed(1)}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -230,19 +232,48 @@ const Foods: React.FC = () => {
               />
               <div style={{ maxHeight: 200, overflowY: 'auto', marginBottom: 12 }}>
                 {foods.filter(f => f.name.toLowerCase().includes(foodSearch.toLowerCase())).map(f => (
-                  <div key={f.food_id} style={{ padding: 8, cursor: 'pointer', background: selectedFood?.food_id === f.food_id ? 'var(--primary-color)' : 'transparent', borderRadius: 6 }} onClick={() => handleSelectFood(f)}>
-                    <b>{f.name}</b> <span style={{ color: '#aaa', fontSize: 13 }}>({f.calories_per_100g} kcal/100g)</span>
+                  <div
+                    key={f.food_id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 12,
+                      padding: 8,
+                      cursor: 'pointer',
+                      background: selectedFood?.food_id === f.food_id ? 'var(--primary-color)' : 'transparent',
+                      borderRadius: 6
+                    }}
+                    onClick={() => handleSelectFood(f)}
+                  >
+                    {f.image && (
+                      <img
+                        src={`/Assest/${f.image}`}
+                        alt={f.name}
+                        style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 6, background: '#222' }}
+                      />
+                    )}
+                    <div>
+                      <b>{f.name}</b>
+                      <span style={{ color: '#aaa', fontSize: 13, marginLeft: 8 }}>({f.calories_per_serving} kcal/serving)</span>
+                    </div>
                   </div>
                 ))}
               </div>
               {selectedFood && (
                 <div style={{ marginBottom: 12, background: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: 12 }}>
                   <div><b>{selectedFood.name}</b></div>
-                  <div>Calories: {selectedFood.calories_per_100g} kcal/100g</div>
-                  <div>Protein: {selectedFood.protein_per_100g}g | Carbs: {selectedFood.carbs_per_100g}g | Fat: {selectedFood.fat_per_100g}g</div>
+                  {selectedFood.image && (
+                    <img
+                      src={`/Assest/${selectedFood.image}`}
+                      alt={selectedFood.name}
+                      style={{ width: 120, height: 120, objectFit: 'cover', borderRadius: 8, margin: '8px 0' }}
+                    />
+                  )}
+                  <div><b>Serving:</b> {selectedFood.serving_type}</div>
+                  <div>Per Serving: {selectedFood.calories_per_serving} kcal | {selectedFood.protein_per_serving}g protein | {selectedFood.carbs_per_serving}g carbs | {selectedFood.fat_per_serving}g fat</div>
                   <input
                     type="number"
-                    placeholder="Amount (g)"
+                    placeholder="Amount (servings)"
                     value={amountGrams}
                     onChange={e => setAmountGrams(e.target.value)}
                     min={1}

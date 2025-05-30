@@ -16,7 +16,7 @@ export const generateSummary = async (req: Request, res: Response) => {
        FROM workout_sessions ws
        JOIN session_details sd ON ws.session_id = sd.session_id
        JOIN exercise_logs el ON sd.session_detail_id = el.session_detail_id
-       WHERE ws.user_id = ? AND ws.scheduled_date >= ? AND ws.scheduled_date < DATE_ADD(?, INTERVAL 1 ${period_type === 'weekly' ? 'WEEK' : 'MONTH'})`,
+       WHERE ws.user_id = ? AND ws.completed = 1 AND ws.scheduled_date >= ? AND ws.scheduled_date < DATE_ADD(?, INTERVAL 1 ${period_type === 'weekly' ? 'WEEK' : 'MONTH'})`,
       [user_id, period_start, period_start]
     );
     const total_workouts = (workouts as any[])[0]?.total_workouts ?? 0;
