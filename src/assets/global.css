@@ -8,13 +8,20 @@
   --glass-blur: blur(16px);
 }
 
-body {
+html, body {
   background: var(--secondary-color);
   color: var(--text-color);
   font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
   margin: 0;
   padding: 0;
   min-height: 100vh;
+  overflow-x: hidden;
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
 h1, h2, h3, h4, h5 {
@@ -83,7 +90,7 @@ input:focus, select:focus, textarea:focus {
 .dashboard-content {
   max-width: 1100px;
   margin: 0 auto;
-  padding: 40px 20px 0 20px;
+  padding: 90px 20px 20px 20px;
 }
 
 .dashboard-title {
