@@ -1,0 +1,194 @@
+.statsGrid {
+  margin-bottom: 2rem;
+}
+
+.sessionCard {
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.sessionCard.dragging {
+  background: var(--card-hover-bg);
+  transform: scale(1.02);
+}
+
+.sessionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+}
+
+.sessionDate {
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin: 0;
+  color: var(--accent-color);
+}
+
+.sessionType {
+  font-size: 0.9rem;
+  color: #aaa;
+  margin: 0.25rem 0 0;
+}
+
+.sessionNotes {
+  font-size: 0.9rem;
+  color: #aaa;
+  margin-top: 0.5rem;
+  font-style: italic;
+}
+
+.completedBadge {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  background: var(--accent-color);
+  color: white;
+  padding: 0.25rem 0.75rem;
+  border-radius: 1rem;
+  font-size: 0.8rem;
+  animation: badgePop 0.3s ease-out;
+}
+
+.sessionActions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.exercisesList {
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  margin-top: 1rem;
+  padding-top: 1rem;
+}
+
+.exerciseItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.2);
+  margin-bottom: 0.5rem;
+  transition: all 0.2s ease;
+}
+
+.exerciseItem:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.exerciseInfo {
+  flex: 1;
+}
+
+.exerciseName {
+  font-weight: 500;
+  margin-bottom: 0.25rem;
+}
+
+.exerciseStats {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.9rem;
+  color: #aaa;
+}
+
+.exerciseActions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.logForm {
+  background: var(--card-bg);
+  padding: 1rem;
+  border-radius: 8px;
+  margin-top: 0.5rem;
+  animation: slideDown 0.3s ease-out;
+}
+
+.formGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.formGroup label {
+  font-size: 0.9rem;
+  color: #aaa;
+}
+
+.formGroup input,
+.formGroup select,
+.formGroup textarea {
+  padding: 0.75rem;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(0, 0, 0, 0.2);
+  color: white;
+  width: 100%;
+}
+
+.error {
+  color: #ff4444;
+  background: rgba(255, 68, 68, 0.1);
+  padding: 0.75rem;
+  border-radius: 8px;
+  margin: 1rem 0;
+}
+
+.modalActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.exerciseGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 1rem;
+  max-height: 400px;
+  overflow-y: auto;
+  padding: 0.5rem;
+  margin: 1rem 0;
+}
+
+.exerciseOption {
+  padding: 1rem;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.exerciseOption:hover {
+  background: rgba(255, 62, 62, 0.1);
+}
+
+.exerciseOption.selected {
+  background: rgba(255, 62, 62, 0.2);
+  border: 1px solid var(--accent-color);
+}
+
+@keyframes badgePop {
+  from {
+    transform: scale(0);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
