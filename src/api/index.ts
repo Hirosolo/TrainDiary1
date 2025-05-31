@@ -83,18 +83,31 @@ export const deleteFoodLog = (logId: number) =>
   }).then(res => res.json());
 
 // Summary
-export const generateSummary = (data: any) =>
-  fetch(`${API_URL}/summary/generate`, {
+export const generateSummary = async (data: any) => {
+  console.log('API: Generating summary with data:', data);
+  const res = await fetch(`${API_URL}/summary/generate`, {
     method: 'POST',
     headers: getHeaders(),
     body: JSON.stringify(data),
-  }).then(res => res.json());
+  });
+  const result = await res.json();
+  console.log('API: Summary generation result:', result);
+  return result;
+};
 
-export const getSummary = (params: any) => {
-  const query = new URLSearchParams(params).toString();
-  return fetch(`${API_URL}/summary?${query}`, {
+export const getSummary = async (data: any) => {
+  console.log('API: Fetching summary with params:', data);
+  const params = new URLSearchParams({
+    user_id: data.user_id,
+    period_type: data.period_type,
+    period_start: data.period_start,
+  });
+  const res = await fetch(`${API_URL}/summary?${params}`, {
     headers: getHeaders(),
-  }).then(res => res.json());
+  });
+  const result = await res.json();
+  console.log('API: Summary fetch result:', result);
+  return result;
 };
 
 // Plans
@@ -119,4 +132,4 @@ export const getMeals = (user_id: number) =>
 export const getSessions = (user_id: number) =>
   fetch(`${API_URL}/workouts?user_id=${user_id}`, {
     headers: getHeaders(),
-  }).then(res => res.json()); 
+  }).then(res => res.json());

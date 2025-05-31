@@ -103,8 +103,18 @@ const Foods: React.FC = () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ user_id: user?.user_id, meal_type: form.meal_type, log_date: form.log_date, foods: foodsPayload })
     });
-    const data = await res.json();
-    if (data.meal_id) {
+    const data = await res.json();    if (data.meal_id) {
+      // Generate new summary
+      await fetch('http://localhost:4000/api/summary/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: user?.user_id,
+          period_type: 'weekly',
+          period_start: new Date().toISOString().slice(0, 10)
+        })
+      });
+      
       setShowForm(false);
       setForm({ log_date: '', meal_type: 'breakfast' });
       setMealFoods([]);

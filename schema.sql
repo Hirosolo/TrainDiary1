@@ -83,6 +83,33 @@ CREATE TABLE exercise_logs (
   FOREIGN KEY (session_detail_id) REFERENCES session_details(session_detail_id) ON DELETE CASCADE
 );
 
+-- Planned split
+CREATE TABLE workout_plans (
+  plan_id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(100) NOT NULL,
+  description TEXT
+);
+
+-- Planned day
+CREATE TABLE plan_days (
+  plan_day_id INT AUTO_INCREMENT PRIMARY KEY,
+  plan_id INT NOT NULL,
+  day_number INT NOT NULL, -- 1 for Day 1, 2 for Day 2, etc.
+  day_type VARCHAR(64), -- e.g., Push, Pull, Legs
+  FOREIGN KEY (plan_id) REFERENCES workout_plans(plan_id) ON DELETE CASCADE
+);
+
+-- Planned exercises
+CREATE TABLE plan_day_exercises (
+  plan_day_exercise_id INT AUTO_INCREMENT PRIMARY KEY,
+  plan_day_id INT NOT NULL,
+  exercise_id INT NOT NULL,
+  sets INT,
+  reps INT,
+  FOREIGN KEY (plan_day_id) REFERENCES plan_days(plan_day_id) ON DELETE CASCADE,
+  FOREIGN KEY (exercise_id) REFERENCES exercises(exercise_id)
+);
+
 -- User Progress Summary (weekly/monthly)
 CREATE TABLE user_progress_summary (
   summary_id INT AUTO_INCREMENT PRIMARY KEY,

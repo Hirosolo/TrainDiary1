@@ -183,8 +183,18 @@ const Workouts: React.FC = () => {
         notes: logForm.notes
       })
     });
-    const data = await res.json();
-    if (data.message === 'Workout logged.') {
+    const data = await res.json();    if (data.message === 'Workout logged.') {
+      // Generate new summary
+      await fetch('http://localhost:4000/api/summary/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: user?.user_id,
+          period_type: 'weekly',
+          period_start: new Date().toISOString().slice(0, 10)
+        })
+      });
+      
       setShowLogForm(null);
       setLogForm({ actual_sets: '', actual_reps: '', weight_kg: '', notes: '' });
       openDetails(detailsModal!.session);
