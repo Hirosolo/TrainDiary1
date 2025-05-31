@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import pool from '../utils/db';
+import { calculateSessionGR } from '../utils/grCalculator';
 
 interface MealData {
   meal_type: string;
@@ -42,15 +43,8 @@ interface WorkoutData {
 
 interface DailyWorkout {
   type: string;
-  exercises: Array<{
-    name: string;
-    category: string;
-    sets: number;
-    reps: number;
-    weight_kg: number | null;
-    duration: number | null;
-  }>;
-
+  exercises: Array<WorkoutData>;
+  total_gr?: number;
 }
 
 interface DailySummary {
@@ -60,6 +54,7 @@ interface DailySummary {
   carbs: number;
   fat: number;
   workouts: number;
+  gr_score?: number;
 }
 
 // Generate summary (transactional)
@@ -77,64 +72,52 @@ export const generateSummary = async (req: Request, res: Response) => {
 
     console.log('\n[DEBUG] ====== FETCHING DATA FOR SUMMARY ======');
     console.log('Period:', { type: period_type, start: period_start });
-    
-    // Get meals with nutrition details
-    const [existingMeals] = await conn.query(
-      `SELECT 
-         m.meal_type,
-         DATE_FORMAT(m.log_date, '%Y-%m-%d') as date,
-         f.name as food_name,
-         md.amount_grams as servings,
-         f.calories_per_serving,
-         f.protein_per_serving,
-         f.carbs_per_serving,
-         f.fat_per_serving,
-         (md.amount_grams * f.calories_per_serving) as total_calories,
-         (md.amount_grams * f.protein_per_serving) as total_protein,
-         (md.amount_grams * f.carbs_per_serving) as total_carbs,
-         (md.amount_grams * f.fat_per_serving) as total_fat
-       FROM user_meals m
-       JOIN user_meal_details md ON m.meal_id = md.meal_id
-       JOIN foods f ON md.food_id = f.food_id
-       WHERE m.user_id = ? 
-       AND m.log_date >= ?
-       AND m.log_date < DATE_ADD(?, INTERVAL 1 ${period_type === 'weekly' ? 'WEEK' : 'MONTH'})
-       ORDER BY m.log_date, m.meal_type`,
-      [user_id, period_start, period_start]
+
+    // Get basic workout stats
+    const end_date = `DATE_ADD('${period_start}', INTERVAL 1 ${period_type === 'weekly' ? 'WEEK' : 'MONTH'})`;
+    const workoutQuery = `
+      SELECT 
+        COUNT(DISTINCT ws.session_id) as total_workouts,
+        IFNULL(SUM(el.duration_seconds),0)/60 as total_duration_minutes
+      FROM workout_sessions ws
+      LEFT JOIN session_details sd ON ws.session_id = sd.session_id
+      LEFT JOIN exercise_logs el ON sd.session_detail_id = el.session_detail_id
+      WHERE ws.user_id = ? 
+      AND ws.completed = 1 
+      AND ws.scheduled_date >= ?
+      AND ws.scheduled_date < DATE_ADD(?, INTERVAL 1 ${period_type === 'weekly' ? 'WEEK' : 'MONTH'})`;
+
+    const [workouts] = await conn.query(workoutQuery, [user_id, period_start, period_start]);
+    const total_workouts = (workouts as any[])[0]?.total_workouts ?? 0;
+    const total_duration_minutes = (workouts as any[])[0]?.total_duration_minutes ?? 0;
+
+    // Get nutrition stats
+    const [daysResult] = await conn.query(
+      `SELECT DATEDIFF(${end_date}, ?) as days`,
+      [period_start]
     );
-    
-    console.log('\n[DEBUG] ====== MEALS IN PERIOD ======');
-    const mealsByDate: Record<string, DailyNutrition> = {};
-    for (const meal of existingMeals as MealData[]) {
-      if (!mealsByDate[meal.date]) {
-        mealsByDate[meal.date] = {
-          calories: 0,
-          protein: 0,
-          carbs: 0,
-          fat: 0,
-          meals: []
-        };
-      }
-      mealsByDate[meal.date].calories += meal.total_calories;
-      mealsByDate[meal.date].protein += meal.total_protein;
-      mealsByDate[meal.date].carbs += meal.total_carbs;
-      mealsByDate[meal.date].fat += meal.total_fat;
-      mealsByDate[meal.date].meals.push({
-        type: meal.meal_type,
-        food: meal.food_name,
-        servings: meal.servings
-      });
-    }
+    const numDays = (daysResult as any[])[0]?.days ?? (period_type === 'weekly' ? 7 : 30);
 
-    Object.entries(mealsByDate).forEach(([date, data]) => {
-      console.log(`\n${date}:`);
-      console.log(`Daily Totals: ${Math.round(data.calories)} cal, ${Math.round(data.protein)}g protein, ${Math.round(data.carbs)}g carbs, ${Math.round(data.fat)}g fat`);
-      data.meals.forEach(meal => {
-        console.log(`  ${meal.type}: ${meal.food} (${meal.servings} servings)`);
-      });
-    });
+    const nutritionQuery = `
+      SELECT 
+        IFNULL(SUM(f.calories_per_serving * umd.amount_grams), 0) as total_calories_intake,
+        IFNULL(SUM(f.protein_per_serving * umd.amount_grams) / ?, 0) as avg_protein,
+        IFNULL(SUM(f.carbs_per_serving * umd.amount_grams) / ?, 0) as avg_carbs,
+        IFNULL(SUM(f.fat_per_serving * umd.amount_grams) / ?, 0) as avg_fat
+      FROM user_meals um
+      JOIN user_meal_details umd ON um.meal_id = umd.meal_id
+      JOIN foods f ON umd.food_id = f.food_id
+      WHERE um.user_id = ? 
+      AND um.log_date >= ?
+      AND um.log_date < DATE_ADD(?, INTERVAL 1 ${period_type === 'weekly' ? 'WEEK' : 'MONTH'})`;
 
-    // Get completed workouts with exercise details
+    const [foods] = await conn.query(nutritionQuery, [numDays, numDays, numDays, user_id, period_start, period_start]);
+    const total_calories_intake = Math.round((foods as any[])[0]?.total_calories_intake ?? 0);
+    const avg_protein = Math.round((foods as any[])[0]?.avg_protein ?? 0);
+    const avg_carbs = Math.round((foods as any[])[0]?.avg_carbs ?? 0);
+    const avg_fat = Math.round((foods as any[])[0]?.avg_fat ?? 0);
+
+    // Get completed workouts with exercise details for GR calculation
     const [existingWorkouts] = await conn.query(
       `SELECT 
          DATE_FORMAT(ws.scheduled_date, '%Y-%m-%d') as date,
@@ -156,106 +139,40 @@ export const generateSummary = async (req: Request, res: Response) => {
        ORDER BY ws.scheduled_date, ws.session_id`,
       [user_id, period_start, period_start]
     );
-    
-    console.log('\n[DEBUG] ====== WORKOUTS IN PERIOD ======');
+
     const workoutsByDate: Record<string, DailyWorkout> = {};
+    let total_gr_score = 0;
+    let workout_count = 0;
+
+    // Group workouts by date
     for (const workout of existingWorkouts as WorkoutData[]) {
       if (!workoutsByDate[workout.date]) {
         workoutsByDate[workout.date] = {
           type: workout.workout_type,
-          exercises: []
+          exercises: [],
+          total_gr: 0
         };
       }
-      workoutsByDate[workout.date].exercises.push({
-        name: workout.exercise_name,
-        category: workout.exercise_category,
-        sets: workout.actual_sets,
-        reps: workout.actual_reps,
-        weight_kg: workout.weight_kg,
-        duration: workout.duration_seconds
-      });
+      workoutsByDate[workout.date].exercises.push(workout);
     }
 
-    Object.entries(workoutsByDate).forEach(([date, data]) => {
-      console.log(`\n${date} - ${data.type}:`);
-      data.exercises.forEach(exercise => {
-        console.log(`  ${exercise.name}: ${exercise.sets}x${exercise.reps} @ ${exercise.weight_kg}kg`);
-      });
-    });
-    
-    // Get the end date based on period type
-    const end_date = `DATE_ADD('${period_start}', INTERVAL 1 ${period_type === 'weekly' ? 'WEEK' : 'MONTH'})`;
-    console.log('[DEBUG] Date range:', { start: period_start, end: end_date });    // Aggregate workout data with modified query
-    console.log('[DEBUG] Counting workouts...');
-    const workoutQuery = `
-      SELECT 
-        COUNT(DISTINCT ws.session_id) as total_workouts,
-        IFNULL(SUM(el.duration_seconds),0)/60 as total_duration_minutes
-      FROM workout_sessions ws
-      LEFT JOIN session_details sd ON ws.session_id = sd.session_id
-      LEFT JOIN exercise_logs el ON sd.session_detail_id = el.session_detail_id
-      WHERE ws.user_id = ? 
-      AND ws.completed = 1 
-      AND ws.scheduled_date >= ?
-      AND ws.scheduled_date < DATE_ADD(?, INTERVAL 1 ${period_type === 'weekly' ? 'WEEK' : 'MONTH'})`;
-    
-    console.log('[DEBUG] Workout query:', workoutQuery);
-    const [workouts] = await conn.query(workoutQuery, [user_id, period_start, period_start]);
-    console.log('[DEBUG] Workout query result:', workouts);
+    // Calculate GR for each workout day
+    for (const [date, workout] of Object.entries(workoutsByDate)) {
+      const dailyGR = calculateSessionGR(workout.exercises);
+      workout.total_gr = dailyGR;
+      total_gr_score += dailyGR;
+      if (dailyGR > 0) workout_count++;
+    }
 
-    const total_workouts = (workouts as any[])[0]?.total_workouts ?? 0;
-    const total_duration_minutes = (workouts as any[])[0]?.total_duration_minutes ?? 0;
+    const avg_gr_score = workout_count > 0 ? total_gr_score / workout_count : 0;
 
-    // Calculate the number of days for proper averaging
-    const [daysResult] = await conn.query(
-      `SELECT DATEDIFF(${end_date}, ?) as days`,
-      [period_start]
-    );
-    const numDays = (daysResult as any[])[0]?.days ?? (period_type === 'weekly' ? 7 : 30);
-    console.log('[DEBUG] Period days:', numDays);
-
-    // Aggregate nutrition data with modified query
-    console.log('[DEBUG] Calculating nutrition...');    const nutritionQuery = `
-      SELECT 
-        IFNULL(SUM(f.calories_per_serving * umd.amount_grams), 0) as total_calories_intake,
-        IFNULL(SUM(f.protein_per_serving * umd.amount_grams) / ?, 0) as avg_protein,
-        IFNULL(SUM(f.carbs_per_serving * umd.amount_grams) / ?, 0) as avg_carbs,
-        IFNULL(SUM(f.fat_per_serving * umd.amount_grams) / ?, 0) as avg_fat
-      FROM user_meals um
-      JOIN user_meal_details umd ON um.meal_id = umd.meal_id
-      JOIN foods f ON umd.food_id = f.food_id
-      WHERE um.user_id = ? 
-      AND um.log_date >= ?
-      AND um.log_date < DATE_ADD(?, INTERVAL 1 ${period_type === 'weekly' ? 'WEEK' : 'MONTH'})`;
-
-    console.log('[DEBUG] Nutrition query:', nutritionQuery);
-    const [foods] = await conn.query(nutritionQuery, [numDays, numDays, numDays, user_id, period_start, period_start]);
-    console.log('[DEBUG] Nutrition query result:', foods);
-
-    // Round the values for better display
-    const total_calories_intake = Math.round((foods as any[])[0]?.total_calories_intake ?? 0);
-    const avg_protein = Math.round((foods as any[])[0]?.avg_protein ?? 0);
-    const avg_carbs = Math.round((foods as any[])[0]?.avg_carbs ?? 0);
-    const avg_fat = Math.round((foods as any[])[0]?.avg_fat ?? 0);
-    
-    console.log('Nutrition stats:', {
-      total_calories_intake,
-      avg_protein,
-      avg_carbs,
-      avg_fat
-    });
-
-    // Debug raw data
-    console.log('Raw workout data:', workouts);
-    console.log('Raw nutrition data:', foods);
-
-    // Insert or update summary
-    console.log('Updating summary in database...');
+    // Update summary with GR scores
     await conn.query(
       `INSERT INTO user_progress_summary
        (user_id, period_type, period_start, total_workouts, total_calories_burned, 
-        avg_duration_minutes, total_calories_intake, avg_protein, avg_carbs, avg_fat)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        avg_duration_minutes, total_calories_intake, avg_protein, avg_carbs, avg_fat,
+        total_gr_score, avg_gr_score)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE
          total_workouts=VALUES(total_workouts),
          total_calories_burned=VALUES(total_calories_burned),
@@ -263,7 +180,9 @@ export const generateSummary = async (req: Request, res: Response) => {
          total_calories_intake=VALUES(total_calories_intake),
          avg_protein=VALUES(avg_protein),
          avg_carbs=VALUES(avg_carbs),
-         avg_fat=VALUES(avg_fat)`,
+         avg_fat=VALUES(avg_fat),
+         total_gr_score=VALUES(total_gr_score),
+         avg_gr_score=VALUES(avg_gr_score)`,
       [
         user_id,
         period_type,
@@ -274,33 +193,15 @@ export const generateSummary = async (req: Request, res: Response) => {
         total_calories_intake,
         avg_protein,
         avg_carbs,
-        avg_fat
+        avg_fat,
+        total_gr_score,
+        avg_gr_score
       ]
     );
 
     await conn.commit();
-    
-    // Calculate daily summaries for the graphs
-    const dailySummaries: Record<string, DailySummary> = {};
-    
-    // Initialize daily summaries with zeros for all days in the period
-    const startDate = new Date(period_start);
-    const endDate = new Date(period_start);
-    endDate.setDate(endDate.getDate() + (period_type === 'weekly' ? 7 : 30));
-    
-    for (let d = new Date(startDate); d < endDate; d.setDate(d.getDate() + 1)) {
-      const dateStr = d.toISOString().split('T')[0];
-      dailySummaries[dateStr] = {
-        date: dateStr,
-        calories: 0,
-        protein: 0,
-        carbs: 0,
-        fat: 0,
-        workouts: 0
-      };
-    }
 
-    // Get daily nutrition totals
+    // Get daily nutrition details for the graph
     const [dailyNutrition] = await conn.query(
       `SELECT 
         DATE_FORMAT(um.log_date, '%Y-%m-%d') as date,
@@ -314,11 +215,32 @@ export const generateSummary = async (req: Request, res: Response) => {
        WHERE um.user_id = ? 
        AND um.log_date >= ?
        AND um.log_date < DATE_ADD(?, INTERVAL 1 ${period_type === 'weekly' ? 'WEEK' : 'MONTH'})
-       GROUP BY DATE_FORMAT(um.log_date, '%Y-%m-%d')`
-      ,[user_id, period_start, period_start]
+       GROUP BY DATE_FORMAT(um.log_date, '%Y-%m-%d')`,
+      [user_id, period_start, period_start]
     );
 
-    // Update daily summaries with nutrition data
+    // Prepare daily summaries for the graph
+    const dailySummaries: Record<string, DailySummary> = {};
+    
+    // Initialize all days with zeros
+    const startDate = new Date(period_start);
+    const endDate = new Date(period_start);
+    endDate.setDate(endDate.getDate() + (period_type === 'weekly' ? 7 : 30));
+    
+    for (let d = new Date(startDate); d < endDate; d.setDate(d.getDate() + 1)) {
+      const dateStr = d.toISOString().split('T')[0];
+      dailySummaries[dateStr] = {
+        date: dateStr,
+        calories: 0,
+        protein: 0,
+        carbs: 0,
+        fat: 0,
+        workouts: 0,
+        gr_score: 0
+      };
+    }
+
+    // Add nutrition data to daily summaries
     for (const day of dailyNutrition as any[]) {
       if (dailySummaries[day.date]) {
         dailySummaries[day.date].calories = Math.round(day.total_calories);
@@ -328,15 +250,15 @@ export const generateSummary = async (req: Request, res: Response) => {
       }
     }
 
-    // Add workout data
+    // Add workout and GR data to daily summaries
     for (const [date, data] of Object.entries(workoutsByDate)) {
       if (dailySummaries[date]) {
         dailySummaries[date].workouts = data.exercises.length > 0 ? 1 : 0;
+        dailySummaries[date].gr_score = data.total_gr || 0;
       }
     }
 
     const dailyData = Object.values(dailySummaries).sort((a, b) => a.date.localeCompare(b.date));
-    console.log('Daily nutrition data:', dailyData);
 
     const response = {
       total_workouts,
@@ -345,7 +267,9 @@ export const generateSummary = async (req: Request, res: Response) => {
       avg_carbs,
       avg_fat,
       total_duration_minutes,
-      dailyData // Add daily data for graphs
+      total_gr_score,
+      avg_gr_score,
+      dailyData
     };
 
     console.log('Summary for period:', {
@@ -357,6 +281,8 @@ export const generateSummary = async (req: Request, res: Response) => {
         avg_protein: `${avg_protein}g/day`,
         avg_carbs: `${avg_carbs}g/day`,
         avg_fat: `${avg_fat}g/day`,
+        total_gr_score,
+        avg_gr_score: `${avg_gr_score.toFixed(2)}`
       },
       dailyDataPoints: dailyData.length
     });
