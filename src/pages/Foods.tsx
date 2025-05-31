@@ -1,9 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import Navbar from '../components/NavBar/NavBar';
 import { useAuth } from '../context/AuthContext';
-import * as api from '../api';
 import { useDashboardRefresh } from '../context/DashboardRefreshContext';
-
 interface Meal {
   meal_id: number;
   log_date: string;
@@ -31,8 +29,8 @@ interface Food {
   image?: string;
 }
 
-const Foods: React.FC = () => {
-  const { user } = useAuth();
+const Foods: React.FC = () => {  const { user } = useAuth();
+  const { triggerRefresh } = useDashboardRefresh();
   const [meals, setMeals] = useState<Meal[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -47,7 +45,6 @@ const Foods: React.FC = () => {
   const [expandedMeal, setExpandedMeal] = useState<number | null>(null);
   const [mealDetails, setMealDetails] = useState<MealFood[]>([]);
   const [deleteMealId, setDeleteMealId] = useState<number | null>(null);
-  const { triggerRefresh } = useDashboardRefresh();
 
   useEffect(() => {
     if (user) fetchMeals();
@@ -97,31 +94,65 @@ const Foods: React.FC = () => {
       setError('Add at least one food.');
       return;
     }
-    const foodsPayload = mealFoods.map(f => ({ food_id: f.food.food_id, amount_grams: f.amount_grams }));
-    const res = await fetch('http://localhost:4000/api/foods/meals', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_id: user?.user_id, meal_type: form.meal_type, log_date: form.log_date, foods: foodsPayload })
-    });
-    const data = await res.json();    if (data.meal_id) {
-      // Generate new summary
-      await fetch('http://localhost:4000/api/summary/generate', {
+    const foodsPayload = mealFoods.map(f => ({ food_id: f.food.food_id, amount_grams: f.amount_grams }));    try {
+      setError('');
+      
+      // Step 1: Log the meal
+      const res = await fetch('http://localhost:4000/api/foods/meals', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          user_id: user?.user_id,
-          period_type: 'weekly',
-          period_start: new Date().toISOString().slice(0, 10)
-        })
+        body: JSON.stringify({ user_id: user?.user_id, meal_type: form.meal_type, log_date: form.log_date, foods: foodsPayload })
       });
+      const data = await res.json();
       
-      setShowForm(false);
-      setForm({ log_date: '', meal_type: 'breakfast' });
-      setMealFoods([]);
-      fetchMeals();
-      triggerRefresh();
-    } else {
-      setError(data.message || 'Failed to log meal');
+      if (data.meal_id) {        // Step 2: Generate new summaries (both daily and weekly)
+        const generateSummaries = async () => {
+          // Generate daily summary
+          const dailySummaryRes = await fetch('http://localhost:4000/api/summary/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              user_id: user?.user_id,
+              period_type: 'daily',
+              period_start: new Date().toISOString().slice(0, 10)
+            })
+          });
+
+          if (!dailySummaryRes.ok) {
+            console.error('Failed to generate daily summary:', await dailySummaryRes.text());
+          }
+
+          // Generate weekly summary
+          const weeklySummaryRes = await fetch('http://localhost:4000/api/summary/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              user_id: user?.user_id,
+              period_type: 'weekly',
+              period_start: new Date().toISOString().slice(0, 10)
+            })
+          });
+
+          if (!weeklySummaryRes.ok) {
+            console.error('Failed to generate weekly summary:', await weeklySummaryRes.text());
+          }
+        };
+
+        await generateSummaries();
+        // Step 3: Clean up UI state
+        setShowForm(false);
+        setForm({ log_date: '', meal_type: 'breakfast' });
+        setMealFoods([]);
+        
+        // Step 4: Refresh data
+        await fetchMeals();
+        triggerRefresh();
+      } else {
+        setError(data.message || 'Failed to log meal');
+      }
+    } catch (err) {
+      console.error('Error logging meal:', err);
+      setError('Failed to log meal. Please try again.');
     }
   };
 
@@ -342,4 +373,4 @@ const Foods: React.FC = () => {
   );
 };
 
-export default Foods; 
+export default Foods;

@@ -300,13 +300,31 @@ export const generateSummary = async (req: Request, res: Response) => {
       };
     }
 
-    // Add nutrition data
-    for (const [date, data] of Object.entries(mealsByDate)) {
-      if (dailySummaries[date]) {
-        dailySummaries[date].calories = Math.round(data.calories);
-        dailySummaries[date].protein = Math.round(data.protein);
-        dailySummaries[date].carbs = Math.round(data.carbs);
-        dailySummaries[date].fat = Math.round(data.fat);
+    // Get daily nutrition totals
+    const [dailyNutrition] = await conn.query(
+      `SELECT 
+        DATE_FORMAT(um.log_date, '%Y-%m-%d') as date,
+        SUM(f.calories_per_serving * umd.amount_grams) as total_calories,
+        SUM(f.protein_per_serving * umd.amount_grams) as total_protein,
+        SUM(f.carbs_per_serving * umd.amount_grams) as total_carbs,
+        SUM(f.fat_per_serving * umd.amount_grams) as total_fat
+       FROM user_meals um
+       JOIN user_meal_details umd ON um.meal_id = umd.meal_id
+       JOIN foods f ON umd.food_id = f.food_id
+       WHERE um.user_id = ? 
+       AND um.log_date >= ?
+       AND um.log_date < DATE_ADD(?, INTERVAL 1 ${period_type === 'weekly' ? 'WEEK' : 'MONTH'})
+       GROUP BY DATE_FORMAT(um.log_date, '%Y-%m-%d')`
+      ,[user_id, period_start, period_start]
+    );
+
+    // Update daily summaries with nutrition data
+    for (const day of dailyNutrition as any[]) {
+      if (dailySummaries[day.date]) {
+        dailySummaries[day.date].calories = Math.round(day.total_calories);
+        dailySummaries[day.date].protein = Math.round(day.total_protein);
+        dailySummaries[day.date].carbs = Math.round(day.total_carbs);
+        dailySummaries[day.date].fat = Math.round(day.total_fat);
       }
     }
 
@@ -318,6 +336,7 @@ export const generateSummary = async (req: Request, res: Response) => {
     }
 
     const dailyData = Object.values(dailySummaries).sort((a, b) => a.date.localeCompare(b.date));
+    console.log('Daily nutrition data:', dailyData);
 
     const response = {
       total_workouts,
