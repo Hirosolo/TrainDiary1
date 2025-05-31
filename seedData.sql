@@ -1,0 +1,53 @@
+-- Seed data for foods
+INSERT INTO foods (name, calories_per_serving, protein_per_serving, carbs_per_serving, fat_per_serving, serving_type, image) VALUES
+('Egg', 70, 6, 1, 5, '1 egg', 'egg.png'),
+('Chicken Breast', 120, 22, 0, 2, '100g', 'chicken_breast.png'),
+('Brown Rice', 215, 5, 45, 2, '1 cup cooked', 'brown_rice.png'),
+('Broccoli', 30, 2.5, 6, 0.3, '1 cup chopped', 'broccoli.png'),
+('Banana', 105, 1.3, 27, 0.3, '1 medium', 'banana.png'),
+('Whey Protein', 120, 24, 3, 1.5, '1 scoop', 'whey_protein.png'),
+('Olive Oil', 119, 0, 0, 14, '1 tbsp', 'olive_oil.png'),
+('Almonds', 160, 6, 6, 14, '28g (about 23)', 'almonds.png'),
+('Greek Yogurt', 100, 17, 6, 0, '170g (6oz)', 'greek_yogurt.png'),
+('Oats', 150, 5, 27, 3, '1/2 cup dry', 'oats.png');
+
+-- Seed data for exercises
+INSERT INTO exercises (name, category, default_sets, default_reps, description) VALUES
+('Bench Press', 'Chest', 4, 8, 'Barbell bench press for chest strength.'),
+('Squat', 'Legs', 4, 10, 'Barbell back squat for legs and glutes.'),
+('Deadlift', 'Back', 3, 6, 'Barbell deadlift for posterior chain.'),
+('Pull Up', 'Back', 3, 8, 'Bodyweight pull ups for back and biceps.'),
+('Push Up', 'Chest', 3, 15, 'Bodyweight push ups for chest and triceps.'),
+('Shoulder Press', 'Shoulders', 3, 10, 'Dumbbell or barbell shoulder press.'),
+('Bicep Curl', 'Arms', 3, 12, 'Dumbbell bicep curls.'),
+('Tricep Extension', 'Arms', 3, 12, 'Dumbbell or cable tricep extensions.'),
+('Plank', 'Core', 3, 60, 'Hold plank position for time (seconds).'),
+('Lunge', 'Legs', 3, 12, 'Dumbbell or bodyweight lunges.'); 
+INSERT INTO exercises (exercise_id, name, category, default_sets, default_reps, description) VALUES
+(1,'Bench Press', 'Chest', 4, 8, 'Barbell bench press for chest strength.'),
+(2,'Squat', 'Legs', 4, 10, 'Barbell back squat for legs and glutes.'),
+(3,'Deadlift', 'Back', 3, 6, 'Barbell deadlift for posterior chain.'),
+(4,'Pull Up', 'Back', 3, 8, 'Bodyweight pull ups for back and biceps.'),
+(5,'Push Up', 'Chest', 3, 15, 'Bodyweight push ups for chest and triceps.'),
+(6,'Bicep Curl', 'Arms', 3, 12, 'Dumbbell bicep curls.'),
+(7,'Tricep Dip', 'Arms', 3, 10, 'Bodyweight tricep dip.'),
+(8,'Plank', 'Core', 3, 60, 'Hold plank position for time (seconds).'),
+(9, 'Overhead Press', 'Shoulders', 3, 10, 'Dumbbell or barbell overhead press.'),
+(10, 'Lateral Raise', 'Shoulders', 3, 12, 'Isolation for shoulder side delts.'),
+(11, 'Arnold Press', 'Shoulders', 3, 10, 'Rotational shoulder press popularized by Arnold Schwarzenegger.'),
+(12, 'Barbell Row', 'Back', 4, 10, 'Barbell bent-over row for back thickness.'),
+(13, 'Hammer Curl', 'Arms', 3, 12, 'Neutral grip dumbbell curl for biceps and brachialis.'),
+(14, 'Skull Crusher', 'Arms', 3, 10, 'Lying triceps extension with barbell or dumbbell.'),
+(15, 'Romanian Deadlift', 'Legs', 3, 10, 'Hip-hinge exercise targeting hamstrings and glutes.'),
+(16, 'Leg Press', 'Legs', 3, 10, 'Machine-based leg press for quads and glutes.'),
+(17, 'Lunge', 'Legs', 3, 12, 'Bodyweight or weighted forward lunge for legs.'),
+(18, 'Cable Fly', 'Chest', 3, 12, 'Cable isolation movement for chest.'),
+(19, 'Seated Cable Row', 'Back', 3, 12, 'Machine or cable row for mid-back.'),
+(20, 'Face Pull', 'Shoulders', 3, 12, 'Cable exercise for rear delts and traps.'),
+(21, 'Hanging Leg Raise', 'Core', 3, 12, 'Core exercise performed hanging from bar.'),
+(22, 'Dumbbell Curl', 'Arms', 3, 12, 'Dumbbell curl for biceps.'),
+(23, 'Triceps Pushdown', 'Arms', 3, 12, 'Cable pushdown for triceps.'),
+(24, 'Front Raise', 'Shoulders', 3, 12, 'Raises dumbbells to target front delts.'),
+(25, 'Upright Row', 'Shoulders', 3, 10, 'Barbell row movement for traps and delts.'),
+(26, 'Leg Curl', 'Legs', 3, 12, 'Machine curl targeting hamstrings.'),
+(27, 'Calf Raise', 'Legs', 3, 15, 'Standing or seated calf raise.');

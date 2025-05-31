@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import Navbar from '../components/NavBar/NavBar';
 import { useAuth } from '../context/AuthContext';
-import * as api from '../api';
-
+import { useDashboardRefresh } from '../context/DashboardRefreshContext';
 interface Meal {
   meal_id: number;
   log_date: string;
@@ -12,22 +11,26 @@ interface MealFood {
   food_id: number;
   name: string;
   amount_grams: number;
-  calories_per_100g: number;
-  protein_per_100g: number;
-  carbs_per_100g: number;
-  fat_per_100g: number;
+  calories_per_serving: number;
+  protein_per_serving: number;
+  carbs_per_serving: number;
+  fat_per_serving: number;
+  serving_type: string;
+  image?: string;
 }
 interface Food {
   food_id: number;
   name: string;
-  calories_per_100g: number;
-  protein_per_100g: number;
-  carbs_per_100g: number;
-  fat_per_100g: number;
+  calories_per_serving: number;
+  protein_per_serving: number;
+  carbs_per_serving: number;
+  fat_per_serving: number;
+  serving_type: string;
+  image?: string;
 }
 
-const Foods: React.FC = () => {
-  const { user } = useAuth();
+const Foods: React.FC = () => {  const { user } = useAuth();
+  const { triggerRefresh } = useDashboardRefresh();
   const [meals, setMeals] = useState<Meal[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -41,6 +44,7 @@ const Foods: React.FC = () => {
   const [error, setError] = useState('');
   const [expandedMeal, setExpandedMeal] = useState<number | null>(null);
   const [mealDetails, setMealDetails] = useState<MealFood[]>([]);
+  const [deleteMealId, setDeleteMealId] = useState<number | null>(null);
 
   useEffect(() => {
     if (user) fetchMeals();
@@ -90,20 +94,65 @@ const Foods: React.FC = () => {
       setError('Add at least one food.');
       return;
     }
-    const foodsPayload = mealFoods.map(f => ({ food_id: f.food.food_id, amount_grams: f.amount_grams }));
-    const res = await fetch('http://localhost:4000/api/foods/meals', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_id: user?.user_id, meal_type: form.meal_type, log_date: form.log_date, foods: foodsPayload })
-    });
-    const data = await res.json();
-    if (data.meal_id) {
-      setShowForm(false);
-      setForm({ log_date: '', meal_type: 'breakfast' });
-      setMealFoods([]);
-      fetchMeals();
-    } else {
-      setError(data.message || 'Failed to log meal');
+    const foodsPayload = mealFoods.map(f => ({ food_id: f.food.food_id, amount_grams: f.amount_grams }));    try {
+      setError('');
+      
+      // Step 1: Log the meal
+      const res = await fetch('http://localhost:4000/api/foods/meals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: user?.user_id, meal_type: form.meal_type, log_date: form.log_date, foods: foodsPayload })
+      });
+      const data = await res.json();
+      
+      if (data.meal_id) {        // Step 2: Generate new summaries (both daily and weekly)
+        const generateSummaries = async () => {
+          // Generate daily summary
+          const dailySummaryRes = await fetch('http://localhost:4000/api/summary/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              user_id: user?.user_id,
+              period_type: 'daily',
+              period_start: new Date().toISOString().slice(0, 10)
+            })
+          });
+
+          if (!dailySummaryRes.ok) {
+            console.error('Failed to generate daily summary:', await dailySummaryRes.text());
+          }
+
+          // Generate weekly summary
+          const weeklySummaryRes = await fetch('http://localhost:4000/api/summary/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              user_id: user?.user_id,
+              period_type: 'weekly',
+              period_start: new Date().toISOString().slice(0, 10)
+            })
+          });
+
+          if (!weeklySummaryRes.ok) {
+            console.error('Failed to generate weekly summary:', await weeklySummaryRes.text());
+          }
+        };
+
+        await generateSummaries();
+        // Step 3: Clean up UI state
+        setShowForm(false);
+        setForm({ log_date: '', meal_type: 'breakfast' });
+        setMealFoods([]);
+        
+        // Step 4: Refresh data
+        await fetchMeals();
+        triggerRefresh();
+      } else {
+        setError(data.message || 'Failed to log meal');
+      }
+    } catch (err) {
+      console.error('Error logging meal:', err);
+      setError('Failed to log meal. Please try again.');
     }
   };
 
@@ -119,6 +168,24 @@ const Foods: React.FC = () => {
     setMealDetails(data);
   };
 
+  const formatDate = (dateStr: string) => {
+    const d = new Date(dateStr);
+    return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  };
+
+  const handleDeleteMeal = (meal_id: number) => {
+    setDeleteMealId(meal_id);
+  };
+
+  const confirmDeleteMeal = async () => {
+    if (deleteMealId) {
+      await fetch(`http://localhost:4000/api/foods/meals/${deleteMealId}`, { method: 'DELETE' });
+      setDeleteMealId(null);
+      fetchMeals();
+      triggerRefresh();
+    }
+  };
+
   return (
     <div className="dashboard-bg">
       <Navbar />
@@ -127,10 +194,11 @@ const Foods: React.FC = () => {
         <div className="dashboard-cards">
           {loading ? <div>Loading...</div> : meals.length === 0 ? <div>No meals yet.</div> : meals.map(meal => (
             <div className="dashboard-card" key={meal.meal_id}>
-              <h3>{meal.meal_type.charAt(0).toUpperCase() + meal.meal_type.slice(1)} - {meal.log_date}</h3>
+              <h3>{meal.meal_type.charAt(0).toUpperCase() + meal.meal_type.slice(1)} - {formatDate(meal.log_date)}</h3>
               <button className="btn-outline" onClick={() => handleExpandMeal(meal.meal_id)}>
                 {expandedMeal === meal.meal_id ? 'Hide Details' : 'View Details'}
               </button>
+              <button className="btn-outline" style={{ marginLeft: 8, borderColor: '#e44', color: '#e44' }} onClick={() => handleDeleteMeal(meal.meal_id)}>Delete</button>
               {expandedMeal === meal.meal_id && (
                 <div style={{ marginTop: 16 }}>
                   {mealDetails.length === 0 ? <div>No foods in this meal.</div> : (
@@ -138,11 +206,13 @@ const Foods: React.FC = () => {
                       <thead>
                         <tr>
                           <th>Food</th>
-                          <th>Amount (g)</th>
+                          <th>Amount (servings)</th>
+                          <th>Serving Type</th>
                           <th>Calories</th>
                           <th>Protein</th>
                           <th>Carbs</th>
                           <th>Fat</th>
+                          <th>Image</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -150,10 +220,12 @@ const Foods: React.FC = () => {
                           <tr key={f.food_id}>
                             <td>{f.name}</td>
                             <td>{f.amount_grams}</td>
-                            <td>{((f.calories_per_100g * f.amount_grams) / 100).toFixed(1)}</td>
-                            <td>{((f.protein_per_100g * f.amount_grams) / 100).toFixed(1)}</td>
-                            <td>{((f.carbs_per_100g * f.amount_grams) / 100).toFixed(1)}</td>
-                            <td>{((f.fat_per_100g * f.amount_grams) / 100).toFixed(1)}</td>
+                            <td>{f.serving_type}</td>
+                            <td>{((f.calories_per_serving * f.amount_grams)).toFixed(1)}</td>
+                            <td>{((f.protein_per_serving * f.amount_grams)).toFixed(1)}</td>
+                            <td>{((f.carbs_per_serving * f.amount_grams)).toFixed(1)}</td>
+                            <td>{((f.fat_per_serving * f.amount_grams)).toFixed(1)}</td>
+                            <td>{f.image ? <img src={`/Assest/${f.image}`} alt={f.name} style={{ width: 32, height: 32, objectFit: 'cover', borderRadius: 4 }} /> : null}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -200,10 +272,10 @@ const Foods: React.FC = () => {
                           <tr key={i}>
                             <td>{f.food.name}</td>
                             <td>{f.amount_grams}</td>
-                            <td>{((f.food.calories_per_100g * Number(f.amount_grams)) / 100).toFixed(1)}</td>
-                            <td>{((f.food.protein_per_100g * Number(f.amount_grams)) / 100).toFixed(1)}</td>
-                            <td>{((f.food.carbs_per_100g * Number(f.amount_grams)) / 100).toFixed(1)}</td>
-                            <td>{((f.food.fat_per_100g * Number(f.amount_grams)) / 100).toFixed(1)}</td>
+                            <td>{((f.food.calories_per_serving * Number(f.amount_grams)) / 100).toFixed(1)}</td>
+                            <td>{((f.food.protein_per_serving * Number(f.amount_grams)) / 100).toFixed(1)}</td>
+                            <td>{((f.food.carbs_per_serving * Number(f.amount_grams)) / 100).toFixed(1)}</td>
+                            <td>{((f.food.fat_per_serving * Number(f.amount_grams)) / 100).toFixed(1)}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -230,19 +302,48 @@ const Foods: React.FC = () => {
               />
               <div style={{ maxHeight: 200, overflowY: 'auto', marginBottom: 12 }}>
                 {foods.filter(f => f.name.toLowerCase().includes(foodSearch.toLowerCase())).map(f => (
-                  <div key={f.food_id} style={{ padding: 8, cursor: 'pointer', background: selectedFood?.food_id === f.food_id ? 'var(--primary-color)' : 'transparent', borderRadius: 6 }} onClick={() => handleSelectFood(f)}>
-                    <b>{f.name}</b> <span style={{ color: '#aaa', fontSize: 13 }}>({f.calories_per_100g} kcal/100g)</span>
+                  <div
+                    key={f.food_id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 12,
+                      padding: 8,
+                      cursor: 'pointer',
+                      background: selectedFood?.food_id === f.food_id ? 'var(--primary-color)' : 'transparent',
+                      borderRadius: 6
+                    }}
+                    onClick={() => handleSelectFood(f)}
+                  >
+                    {f.image && (
+                      <img
+                        src={`/Assest/${f.image}`}
+                        alt={f.name}
+                        style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 6, background: '#222' }}
+                      />
+                    )}
+                    <div>
+                      <b>{f.name}</b>
+                      <span style={{ color: '#aaa', fontSize: 13, marginLeft: 8 }}>({f.calories_per_serving} kcal/serving)</span>
+                    </div>
                   </div>
                 ))}
               </div>
               {selectedFood && (
                 <div style={{ marginBottom: 12, background: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: 12 }}>
                   <div><b>{selectedFood.name}</b></div>
-                  <div>Calories: {selectedFood.calories_per_100g} kcal/100g</div>
-                  <div>Protein: {selectedFood.protein_per_100g}g | Carbs: {selectedFood.carbs_per_100g}g | Fat: {selectedFood.fat_per_100g}g</div>
+                  {selectedFood.image && (
+                    <img
+                      src={`/Assest/${selectedFood.image}`}
+                      alt={selectedFood.name}
+                      style={{ width: 120, height: 120, objectFit: 'cover', borderRadius: 8, margin: '8px 0' }}
+                    />
+                  )}
+                  <div><b>Serving:</b> {selectedFood.serving_type}</div>
+                  <div>Per Serving: {selectedFood.calories_per_serving} kcal | {selectedFood.protein_per_serving}g protein | {selectedFood.carbs_per_serving}g carbs | {selectedFood.fat_per_serving}g fat</div>
                   <input
                     type="number"
-                    placeholder="Amount (g)"
+                    placeholder="Amount (servings)"
                     value={amountGrams}
                     onChange={e => setAmountGrams(e.target.value)}
                     min={1}
@@ -255,9 +356,21 @@ const Foods: React.FC = () => {
             </div>
           </div>
         )}
+        {deleteMealId && (
+          <div className="modal-bg">
+            <div className="auth-card" style={{ maxWidth: 340, textAlign: 'center' }}>
+              <h3>Delete Meal?</h3>
+              <p style={{ margin: '16px 0', color: '#e44' }}>Are you sure you want to delete this meal and all its data? This cannot be undone.</p>
+              <div style={{ display: 'flex', gap: 16, justifyContent: 'center', marginTop: 16 }}>
+                <button className="btn-outline" style={{ borderColor: '#e44', color: '#e44', minWidth: 80 }} onClick={confirmDeleteMeal}>Delete</button>
+                <button className="btn-outline" style={{ minWidth: 80 }} onClick={() => setDeleteMealId(null)}>Cancel</button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
 };
 
-export default Foods; 
+export default Foods;

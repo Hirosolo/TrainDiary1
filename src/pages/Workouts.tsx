@@ -5,12 +5,17 @@ import * as api from '../api';
 import { DragDropContext, Draggable, DropResult, DroppableProvided, DraggableProvided } from '@hello-pangea/dnd';
 import { StrictModeDroppable } from '../components/StrictModeDroppable';
 import FlipMove from 'react-flip-move';
+import { getSummary, generateSummary } from '../api';
+import { useSummaryStore } from '../context/SummaryStore';
+import { Navigate } from 'react-router-dom';
+import { useDashboardRefresh } from '../context/DashboardRefreshContext';
 
 interface Session {
   session_id: number;
   scheduled_date: string;
   completed: boolean;
   notes: string;
+  type?: string;
 }
 interface SessionDetail {
   session_detail_id: number;
@@ -40,8 +45,34 @@ interface Exercise {
   description?: string;
 }
 
+const sessionTypes = [
+  'Push',
+  'Pull',
+  'Legs',
+  'Arms + Back',
+  'Full Body',
+  'Cardio',
+  'Upper',
+  'Lower',
+  'Chest',
+  'Back',
+  'Shoulders',
+  'Arms',
+  'Core / Abs',
+  'Push + Pull',
+  'Chest + Triceps',
+  'Back + Biceps',
+  'Legs + Shoulders',
+  'Functional Training',
+  'Full Body + Cardio',
+  'Custom',
+];
+
 const Workouts: React.FC = () => {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
+  const { triggerRefresh } = useDashboardRefresh();
+  if (authLoading) return <div className="dashboard-container">Loading user...</div>;
+  if (!user) return <Navigate to="/login" replace />;
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -64,11 +95,14 @@ const Workouts: React.FC = () => {
   const [deleteLogConfirm, setDeleteLogConfirm] = useState<number | null>(null);
   const [deleteExerciseConfirm, setDeleteExerciseConfirm] = useState<number | null>(null);
   const [deleteSessionConfirm, setDeleteSessionConfirm] = useState<number | null>(null);
+  const [formType, setFormType] = useState(sessionTypes[0]);
+  const [completeError, setCompleteError] = useState('');
+  const summaryStore = useSummaryStore.getState();
 
   useEffect(() => {
-    if (user) fetchSessions();
+    if (user && !authLoading) fetchSessions();
     // eslint-disable-next-line
-  }, [user]);
+  }, [user, authLoading]);
 
   const fetchSessions = async () => {
     setLoading(true);
@@ -91,12 +125,14 @@ const Workouts: React.FC = () => {
   const handleSchedule = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    const res = await api.createSession({ user_id: user?.user_id, scheduled_date: formDate, notes: formNotes });
+    const res = await api.createSession({ user_id: user?.user_id, scheduled_date: formDate, notes: formNotes, type: formType });
     if (res.session_id) {
       setShowForm(false);
       setFormDate('');
       setFormNotes('');
+      setFormType(sessionTypes[0]);
       fetchSessions();
+      triggerRefresh();
     } else {
       setError(res.message || 'Failed to schedule session');
     }
@@ -147,11 +183,22 @@ const Workouts: React.FC = () => {
         notes: logForm.notes
       })
     });
-    const data = await res.json();
-    if (data.message === 'Workout logged.') {
+    const data = await res.json();    if (data.message === 'Workout logged.') {
+      // Generate new summary
+      await fetch('http://localhost:4000/api/summary/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: user?.user_id,
+          period_type: 'weekly',
+          period_start: new Date().toISOString().slice(0, 10)
+        })
+      });
+      
       setShowLogForm(null);
       setLogForm({ actual_sets: '', actual_reps: '', weight_kg: '', notes: '' });
       openDetails(detailsModal!.session);
+      triggerRefresh();
     } else {
       setLogError(data.message || 'Failed to log workout');
     }
@@ -224,6 +271,7 @@ const Workouts: React.FC = () => {
       fetchSessions();
       setDetailsModal(null);
       setDeleteSessionConfirm(null);
+      triggerRefresh();
     }
   };
 
@@ -248,6 +296,29 @@ const Workouts: React.FC = () => {
       await fetch(`http://localhost:4000/api/workouts/logs/${deleteLogConfirm}`, { method: 'DELETE' });
       if (detailsModal) openDetails(detailsModal.session);
       setDeleteLogConfirm(null);
+    }
+  };
+
+  const canMarkCompleted =
+    detailsModal?.session &&
+    !detailsModal.session.completed &&
+    sessionDetails.length > 0 &&
+    sessionDetails.every(detail => sessionLogs.some(log => log.session_detail_id === detail.session_detail_id));
+
+  const handleMarkCompleted = async () => {
+    if (!detailsModal) return;
+    setCompleteError('');
+    const res = await api.markSessionCompleted(detailsModal.session.session_id);
+    if (res.message === 'Session marked as completed.') {
+      // Refresh session list and details
+      fetchSessions();
+      openDetails({ ...detailsModal.session, completed: true });
+      // Regenerate summary for the current week and update global state
+      if (user) {
+        await summaryStore.refreshSummary(user.user_id);
+      }
+    } else {
+      setCompleteError(res.message || 'Failed to mark as completed');
     }
   };
 
@@ -335,6 +406,7 @@ const Workouts: React.FC = () => {
             <div className="dashboard-card" key={session.session_id}>
               <h3>Session #{session.session_id}</h3>
               <div className="dashboard-value">Date: {formatDate(session.scheduled_date)}</div>
+              <div className="dashboard-value">Type: {session.type || '-'}</div>
               <div className="dashboard-value">Notes: {session.notes || '-'}</div>
               <div className="dashboard-value">Completed: {session.completed ? 'Yes' : 'No'}</div>
               <button className="btn-primary" onClick={() => openDetails(session)}>View Details</button>
@@ -351,6 +423,9 @@ const Workouts: React.FC = () => {
               <h3>Schedule Workout Session</h3>
               <form onSubmit={handleSchedule}>
                 <input type="date" value={formDate} onChange={e => setFormDate(e.target.value)} required />
+                <select value={formType} onChange={e => setFormType(e.target.value)} required>
+                  {sessionTypes.map(type => <option key={type} value={type}>{type}</option>)}
+                </select>
                 <input type="text" value={formNotes} onChange={e => setFormNotes(e.target.value)} placeholder="Notes (optional)" />
                 <button className="btn-primary" type="submit" disabled={!formDate}>Create</button>
                 <button className="btn-outline" type="button" onClick={() => setShowForm(false)}>Cancel</button>
@@ -403,8 +478,13 @@ const Workouts: React.FC = () => {
             <div className="auth-card" style={{ maxWidth: '1400px', minWidth: 700, textAlign: 'left' }}>
               <h3>Session Details</h3>
               <div><b>Date:</b> {formatDate(detailsModal.session.scheduled_date)}</div>
+              <div><b>Type:</b> {detailsModal.session.type || '-'}</div>
               <div><b>Notes:</b> {detailsModal.session.notes || '-'}</div>
               <div><b>Completed:</b> {detailsModal.session.completed ? 'Yes' : 'No'}</div>
+              {canMarkCompleted && (
+                <button className="btn-primary" style={{ margin: '16px 0 0 0' }} onClick={handleMarkCompleted}>Mark as Completed</button>
+              )}
+              {completeError && <div className="error" style={{ marginTop: 8 }}>{completeError}</div>}
               <div style={{ margin: '18px 0 8px 0', fontWeight: 600 }}>
                 Exercises:
               </div>
