@@ -1,0 +1,71 @@
+.planDetails {
+  background: #1a1a1d;
+  padding: 32px;
+  border-radius: 12px;
+  max-width: 800px;
+  margin: 0 auto;
+  color: #fff;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.daySection {
+  margin: 24px 0;
+  padding: 16px;
+  background: #29292c;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.dayTitle {
+  font-size: 1.2em;
+  font-weight: 600;
+  color: #e66;
+  margin-bottom: 16px;
+  position: relative;
+  padding-left: 16px;
+}
+
+.dayTitle::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 16px;
+  background: #e66;
+  border-radius: 2px;
+}
+
+.exercise {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr;
+  gap: 16px;
+  padding: 12px;
+  background: #1a1a1d;
+  border-radius: 6px;
+  margin: 8px 0;
+  align-items: center;
+  transition: all 0.2s ease;
+}
+
+.exercise:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.exerciseName {
+  font-weight: 500;
+}
+
+.exerciseDetails {
+  color: #e66;
+  text-align: center;
+}
+
+.exerciseCategory {
+  color: #888;
+  text-align: right;
+  font-style: italic;
+}
