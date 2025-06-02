@@ -1,6 +1,6 @@
 .navbar {
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
   padding: 15px 50px;
   background: var(--secondary-color);
@@ -18,15 +18,29 @@
   font-weight: bold;
   color: var(--text-color);
   z-index: 1001;
+  margin-right: 40px;
+}
+
+.navbar > .logo {
+  margin-right: 40px;
+}
+
+.navbar > .nav-links {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 .nav-links {
   display: flex;
   align-items: center;
+  justify-content: center;
+  flex: 1;
 }
 
 .nav-links a {
-  margin: 0 15px;
+  margin: 0 25px;
   text-decoration: none;
   color: var(--text-color);
   font-size: 16px;

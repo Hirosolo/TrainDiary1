@@ -1,8 +1,4 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { useAuth } from '../context/AuthContext';
-import { getSessions, generateSummary, getSummary } from '../api';
-import Navbar from '../components/NavBar/NavBar';
-import styles from './Dashboard.module.css';
 import { Navigate } from 'react-router-dom';
 import { Line } from 'react-chartjs-2';
 import {
@@ -15,7 +11,26 @@ import {
   Tooltip,
   Legend,
 } from 'chart.js';
+import {
+  FaDumbbell,
+  FaFire,
+  FaAppleAlt,
+  FaTrophy,
+  FaArrowUp,
+  FaArrowDown
+} from 'react-icons/fa';
+import { useAuth } from '../context/AuthContext';
 import { useDashboardRefresh } from '../context/DashboardRefreshContext';
+import { generateSummary, getSummary } from '../api';
+import Navbar from '../components/NavBar/NavBar';
+import {
+  PageContainer,
+  PageHeader,
+  CardGrid,
+  Card,
+  StatCard
+} from '../components/shared/SharedComponents';
+import styles from './Dashboard.module.css';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
 
@@ -41,20 +56,6 @@ interface Summary {
   dailyData: DailyData[];
 }
 
-interface SessionDetail {
-  session_detail_id: number;
-  exercise_id: number;
-  name: string;
-}
-
-interface SessionLog {
-  log_id: number;
-  session_detail_id: number;
-  actual_sets: number;
-  actual_reps: number;
-  weight_kg: number;
-}
-
 interface ChartData {
   labels: string[];
   datasets: Array<{
@@ -73,9 +74,11 @@ const Dashboard: React.FC = () => {
   const { user, loading: authLoading } = useAuth();
   const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState<Summary | null>(null);
-  // Initialize with current month in YYYY-MM format
   const [periodType, setPeriodType] = useState<string>(new Date().toISOString().slice(0, 7));
   const { subscribe } = useDashboardRefresh();
+
+  if (authLoading) return <div className="dashboard-container">Loading user...</div>;
+  if (!user) return <Navigate to="/login" replace />;
 
   // Function to fetch all required data
   const fetchData = useCallback(async () => {
@@ -183,7 +186,10 @@ const Dashboard: React.FC = () => {
     if (!summary?.dailyData?.length) return null;
 
     return {
-      labels: summary.dailyData.map(d => d.date),
+      labels: summary.dailyData.map(d => new Date(d.date).toLocaleDateString('en-US', { 
+        month: 'short', 
+        day: 'numeric' 
+      })),
       datasets: [
         {
           label: 'Calories',
@@ -191,6 +197,7 @@ const Dashboard: React.FC = () => {
           borderColor: 'rgb(255, 99, 132)',
           backgroundColor: 'rgba(255, 99, 132, 0.5)',
           yAxisID: 'y',
+          tension: 0.4
         },
         {
           label: 'Protein (g)',
@@ -198,68 +205,37 @@ const Dashboard: React.FC = () => {
           borderColor: 'rgb(53, 162, 235)',
           backgroundColor: 'rgba(53, 162, 235, 0.5)',
           yAxisID: 'y1',
-        },
-        {
-          label: 'Carbs (g)',
-          data: summary.dailyData.map(d => d.carbs),
-          borderColor: 'rgb(75, 192, 192)',
-          backgroundColor: 'rgba(75, 192, 192, 0.5)',
-          yAxisID: 'y1',
-        },
-        {
-          label: 'Fat (g)',
-          data: summary.dailyData.map(d => d.fat),
-          borderColor: 'rgb(255, 159, 64)',
-          backgroundColor: 'rgba(255, 159, 64, 0.5)',
-          yAxisID: 'y1',
+          tension: 0.4
         }
       ]
     };
   }, [summary]);
 
-  // Nutrition graph specific options
-  const nutritionGraphOptions = {
-    ...graphOptions,
-    scales: {
-      ...graphOptions.scales,
-      y: {
-        ...graphOptions.scales.y,
-        position: 'left' as const,
-        title: {
-          display: true,
-          text: 'Calories'
-        }
-      },
-      y1: {
-        type: 'linear' as const,
-        display: true,
-        position: 'right' as const,
-        title: {
-          display: true,
-          text: 'Grams'
-        },
-        grid: {
-          drawOnChartArea: false
-        }
-      }
-    }
-  };
-
-  // GR Score graph data
-  const grScoreGraphData = React.useMemo(() => {
+  // Prepare workout graph data
+  const workoutGraphData = React.useMemo(() => {
     if (!summary?.dailyData?.length) return null;
 
     return {
-      labels: summary.dailyData.map(d => d.date),
-      datasets: [{
-        label: 'GR Score',
-        data: summary.dailyData.map(d => d.gr_score),
-        borderColor: '#36c',
-        backgroundColor: 'rgba(54,99,255,0.2)',
-        borderWidth: 2,
-        pointRadius: 4,
-        tension: 0.1
-      }]
+      labels: summary.dailyData.map(d => new Date(d.date).toLocaleDateString('en-US', { 
+        month: 'short', 
+        day: 'numeric' 
+      })),
+      datasets: [
+        {
+          label: 'GR Score',
+          data: summary.dailyData.map(d => d.gr_score),
+          borderColor: 'rgb(75, 192, 192)',
+          backgroundColor: 'rgba(75, 192, 192, 0.5)',
+          tension: 0.4
+        },
+        {
+          label: 'Workouts',
+          data: summary.dailyData.map(d => d.workouts),
+          borderColor: 'rgb(255, 159, 64)',
+          backgroundColor: 'rgba(255, 159, 64, 0.5)',
+          tension: 0.4
+        }
+      ]
     };
   }, [summary]);
 
@@ -270,106 +246,91 @@ const Dashboard: React.FC = () => {
     }
   }, [loading, summary]);
 
-  if (authLoading || loading) {
-    return (
-      <div className={styles.dashboard}>
-        <Navbar />
-        <div className={styles['dashboard-content']}>
-          <div className={styles['loading-spinner']}>Loading...</div>
-        </div>
-      </div>
-    );
-  }
+  const formatNumber = (num: number): string => {
+    return num >= 1000 ? (num / 1000).toFixed(1) + 'k' : num.toString();
+  };
 
-  if (!user) {
-    return <Navigate to="/login" />;
-  }
+  const calculateChange = (current: number, previous: number): number => {
+    if (previous === 0) return 0;
+    return ((current - previous) / previous) * 100;
+  };
+
+  const formatChange = (change: number): string => {
+    if (change > 0) return `+${change.toFixed(1)}%`;
+    return change.toFixed(1) + '%';
+  };
+
+  const getChangeIcon = (change: number) => {
+    if (change > 0) return <FaArrowUp />;
+    return <FaArrowDown />;
+  };
 
   return (
-    <div className={styles.dashboard}>
+    <div className={styles['dashboard-bg']}>
       <Navbar />
-      <div className={styles['dashboard-content']}>
-        {/* Dashboard Header */}
-        <div className={styles['dashboard-header']}>
-          <h2 className={styles['dashboard-title']}>
-            Monthly Progress - {new Date(periodType).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-          </h2>
-          <div className={styles['period-selector']}>
-            <span>Select Month:</span>
-            <input
-              type="month"
-              value={periodType}
-              onChange={e => setPeriodType(e.target.value)}
-              className={styles['period-select']}
-            />
-          </div>
+      <PageContainer className={styles.dashboardContent}>
+        <PageHeader title="Dashboard"></PageHeader>
+        
+        <div className={styles['period-selector']}>
+          <input
+            type="month"
+            className={styles['period-select']}
+            value={periodType}
+            onChange={(e) => setPeriodType(e.target.value)}
+          />
         </div>
 
-        {/* Summary Stats */}
-        <div className={styles['summary-stats']}>
-          <div className={styles['stat-card']}>
-            <h3>Total Workouts</h3>
-            <p>{summary?.total_workouts || 0}</p>
-          </div>
-          <div className={styles['stat-card']}>
-            <h3>Avg. GR Score</h3>
-            <p>{summary?.avg_gr_score?.toFixed(1) || 0}</p>
-          </div>
-          <div className={styles['stat-card']}>
-            <h3>Total Duration</h3>
-            <p>{Math.round((summary?.total_duration_minutes || 0) / 60)} hrs</p>
-          </div>
-          <div className={styles['stat-card']}>
-            <h3>Avg. Calories</h3>
-            <p>{Math.round(summary?.total_calories_intake || 0)}</p>
-          </div>
-          <div className={styles['stat-card']}>
-            <h3>Avg. Protein</h3>
-            <p>{Math.round(summary?.avg_protein || 0)}g</p>
-          </div>
-          <div className={styles['stat-card']}>
-            <h3>Avg. Carbs</h3>
-            <p>{Math.round(summary?.avg_carbs || 0)}g</p>
-          </div>
-          <div className={styles['stat-card']}>
-            <h3>Avg. Fat</h3>
-            <p>{Math.round(summary?.avg_fat || 0)}g</p>
-          </div>
-        </div>
+        {loading ? (
+          <div className={styles['loading-spinner']}>Loading summary...</div>
+        ) : summary ? (
+          <>
+            <div className={styles.summaryStats}>
+              <StatCard
+                label="Total Workouts"
+                value={summary.total_workouts}
+                icon={<FaDumbbell color="#e66" />}
+              />
+              <StatCard
+                label="Total Calories Intake"
+                value={formatNumber(summary.total_calories_intake)}
+                icon={<FaFire color="#f08f30" />}
+              />
+              <StatCard
+                label="Avg. Daily Protein"
+                value={`${summary.avg_protein.toFixed(1)}g`}
+                icon={<FaAppleAlt color="#90ee90" />}
+              />
+              <StatCard
+                label="Avg. GR Score"
+                value={summary.avg_gr_score.toFixed(1)}
+                icon={<FaTrophy color="#ffd700" />}
+              />
+            </div>
 
-        {/* Nutrition Graph */}
-        <div className={styles['graph-section']}>
-          <h3>Nutrition Overview</h3>
-          {nutritionGraphData ? (
-            <Line options={nutritionGraphOptions} data={nutritionGraphData} />
-          ) : (
-            <p>No nutrition data available</p>
-          )}
-        </div>
+            <div className={styles.graphContainer}>
+              <div className={styles.graphSection}>
+                <h3>Daily Nutrition & Protein</h3>
+                {nutritionGraphData ? (
+                  <Line data={nutritionGraphData} options={graphOptions} />
+                ) : (
+                  <div className={styles.emptyState}>No nutrition data available for this period.</div>
+                )}
+              </div>
 
-        {/* GR Score Graph */}
-        <div className={styles['graph-section']}>
-          <div className={styles['graph-header']}>
-            <h3>GR Score Progress</h3>
-          </div>
-          {grScoreGraphData ? (
-            <Line 
-              options={{
-                ...graphOptions,
-                plugins: {
-                  ...graphOptions.plugins,
-                  title: {
-                    display: false
-                  }
-                }
-              }} 
-              data={grScoreGraphData} 
-            />
-          ) : (
-            <p>No GR Score data available</p>
-          )}
-        </div>
-      </div>
+              <div className={styles.graphSection}>
+                <h3>Daily GR Score & Workouts</h3>
+                {workoutGraphData ? (
+                  <Line data={workoutGraphData} options={graphOptions} />
+                ) : (
+                  <div className={styles.emptyState}>No workout data available for this period.</div>
+                )}
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className={styles.emptyState}>No summary data available for this period. Generate data by adding workouts and foods.</div>
+        )}
+      </PageContainer>
     </div>
   );
 };

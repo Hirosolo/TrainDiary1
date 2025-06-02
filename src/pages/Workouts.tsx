@@ -1,14 +1,23 @@
 import React, { useEffect, useState } from 'react';
-import Navbar from '../components/NavBar/NavBar';
-import { useAuth } from '../context/AuthContext';
-import * as api from '../api';
-import { DragDropContext, Draggable, DropResult, DroppableProvided, DraggableProvided } from '@hello-pangea/dnd';
-import { StrictModeDroppable } from '../components/StrictModeDroppable';
-import FlipMove from 'react-flip-move';
-import { getSummary, generateSummary } from '../api';
-import { useSummaryStore } from '../context/SummaryStore';
 import { Navigate } from 'react-router-dom';
+import { DragDropContext, Draggable, DropResult, DroppableProvided, DraggableProvided, Droppable } from '@hello-pangea/dnd';
+import { FaDumbbell, FaFire, FaClock, FaTrophy, FaTimes, FaGripVertical } from 'react-icons/fa';
+import { HiPlusSm } from 'react-icons/hi';
+import Navbar from '../components/NavBar/NavBar';
+import { StrictModeDroppable } from '../components/StrictModeDroppable';
+import { useAuth } from '../context/AuthContext';
 import { useDashboardRefresh } from '../context/DashboardRefreshContext';
+import {
+  PageContainer,
+  PageHeader,
+  CardGrid,
+  Card,
+  ModalContent,
+  GridForm,
+  StatCard
+} from '../components/shared/SharedComponents';
+import styles from './Workouts.module.css';
+import { addExercisesToSession } from '../api';
 
 interface Session {
   session_id: number;
@@ -68,11 +77,17 @@ const sessionTypes = [
   'Custom',
 ];
 
+interface DragSnapshot {
+  isDragging: boolean;
+}
+
 const Workouts: React.FC = () => {
   const { user, loading: authLoading } = useAuth();
   const { triggerRefresh } = useDashboardRefresh();
+  
   if (authLoading) return <div className="dashboard-container">Loading user...</div>;
   if (!user) return <Navigate to="/login" replace />;
+
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -85,550 +100,673 @@ const Workouts: React.FC = () => {
   const [showAddExercise, setShowAddExercise] = useState(false);
   const [allExercises, setAllExercises] = useState<Exercise[]>([]);
   const [addExerciseForm, setAddExerciseForm] = useState({ exercise_id: '', planned_sets: '', planned_reps: '' });
-  const [addExerciseError, setAddExerciseError] = useState('');
-  const [showLogForm, setShowLogForm] = useState<number | null>(null);
-  const [logForm, setLogForm] = useState({ actual_sets: '', actual_reps: '', weight_kg: '', notes: '' });
-  const [logError, setLogError] = useState('');
-  const [editExerciseDetail, setEditExerciseDetail] = useState<SessionDetail | null>(null);
-  const [editForm, setEditForm] = useState({ planned_sets: '', planned_reps: '', notes: '' });
-  const [selectedForMove, setSelectedForMove] = useState<number | null>(null);
-  const [deleteLogConfirm, setDeleteLogConfirm] = useState<number | null>(null);
-  const [deleteExerciseConfirm, setDeleteExerciseConfirm] = useState<number | null>(null);
   const [deleteSessionConfirm, setDeleteSessionConfirm] = useState<number | null>(null);
+  const [deleteExerciseConfirm, setDeleteExerciseConfirm] = useState<number | null>(null);
   const [formType, setFormType] = useState(sessionTypes[0]);
-  const [completeError, setCompleteError] = useState('');
-  const summaryStore = useSummaryStore.getState();
+  const [workoutStats, setWorkoutStats] = useState({
+    totalWorkouts: 0,
+    completedToday: false,
+    weeklyStreak: 0,
+    avgDuration: 0
+  });
+  const [addExerciseLoading, setAddExerciseLoading] = useState(false);
+  const [showAddExerciseModal, setShowAddExerciseModal] = useState(false);
+  const [showLogModal, setShowLogModal] = useState(false);
+  const [logForm, setLogForm] = useState({ actual_sets: '', actual_reps: '', weight_kg: '', notes: '' });
+  const [logExerciseId, setLogExerciseId] = useState<number | null>(null);
+  const [completingSession, setCompletingSession] = useState(false);
+  const [reorderExerciseId, setReorderExerciseId] = useState<number | null>(null);
+  const [reorderLogId, setReorderLogId] = useState<number | null>(null);
 
   useEffect(() => {
     if (user && !authLoading) fetchSessions();
-    // eslint-disable-next-line
   }, [user, authLoading]);
+
+  useEffect(() => {
+    if (sessions.length > 0) {
+      const today = new Date().toISOString().slice(0, 10);
+      const stats = {
+        totalWorkouts: sessions.filter(s => s.completed).length,
+        completedToday: sessions.some(s => s.scheduled_date.slice(0, 10) === today && s.completed),
+        weeklyStreak: calculateWeeklyStreak(sessions),
+        avgDuration: calculateAverageDuration(sessions)
+      };
+      setWorkoutStats(stats);
+    }
+  }, [sessions]);
 
   const fetchSessions = async () => {
     setLoading(true);
-    const res = await fetch(`http://localhost:4000/api/workouts?user_id=${user?.user_id}`);
-    const data = await res.json();
-    setSessions(data);
+    try {
+      const res = await fetch(`http://localhost:4000/api/workouts?user_id=${user?.user_id}`);
+      const data = await res.json();
+      setSessions(data);
+    } catch (error) {
+      console.error('Error fetching sessions:', error);
+      setError('Failed to load workouts');
+    }
     setLoading(false);
   };
 
   const openDetails = async (session: Session) => {
     setDetailsModal({ session, open: true });
-    const [detailsRes, logsRes] = await Promise.all([
-      fetch(`http://localhost:4000/api/workouts/${session.session_id}/details`),
-      fetch(`http://localhost:4000/api/workouts/${session.session_id}/logs`)
-    ]);
-    setSessionDetails(await detailsRes.json());
-    setSessionLogs(await logsRes.json());
+    try {
+      const [detailsRes, logsRes] = await Promise.all([
+        fetch(`http://localhost:4000/api/workouts/${session.session_id}/details`),
+        fetch(`http://localhost:4000/api/workouts/${session.session_id}/logs`)
+      ]);
+      setSessionDetails(await detailsRes.json());
+      setSessionLogs(await logsRes.json());
+    } catch (error) {
+      console.error('Error loading session details:', error);
+      setError('Failed to load workout details');
+    }
   };
 
   const handleSchedule = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    const res = await api.createSession({ user_id: user?.user_id, scheduled_date: formDate, notes: formNotes, type: formType });
-    if (res.session_id) {
-      setShowForm(false);
-      setFormDate('');
-      setFormNotes('');
-      setFormType(sessionTypes[0]);
+    try {
+      const response = await fetch('http://localhost:4000/api/workouts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          user_id: user?.user_id, 
+          scheduled_date: formDate, 
+          notes: formNotes, 
+          type: formType 
+        })
+      });
+      const data = await response.json();
+      
+      if (data.session_id) {
+        setShowForm(false);
+        setFormDate('');
+        setFormNotes('');
+        setFormType(sessionTypes[0]);
+        fetchSessions();
+        triggerRefresh();
+      } else {
+        setError(data.message || 'Failed to schedule session');
+      }
+    } catch (error) {
+      console.error('Error scheduling session:', error);
+      setError('Failed to schedule session. Please try again.');
+    }
+  };
+
+  const handleSelectExercise = (exercise: Exercise) => {
+    setAddExerciseForm({
+      exercise_id: exercise.exercise_id.toString(),
+      planned_sets: exercise.default_sets?.toString() || '',
+      planned_reps: exercise.default_reps?.toString() || ''
+    });
+  };
+
+  const handleDeleteExercise = async (detailId: number) => {
+    try {
+      await fetch(`http://localhost:4000/api/workouts/details/${detailId}`, { method: 'DELETE' });
+      setDeleteExerciseConfirm(null);
+      if (detailsModal?.session) {
+        openDetails(detailsModal.session);
+      }
+    } catch (error) {
+      console.error('Error deleting exercise:', error);
+      setError('Failed to delete exercise. Please try again.');
+    }
+  };
+
+  const handleDeleteSession = async (sessionId: number) => {
+    try {
+      await fetch(`http://localhost:4000/api/workouts/${sessionId}`, { method: 'DELETE' });
+      setDeleteSessionConfirm(null);
       fetchSessions();
       triggerRefresh();
-    } else {
-      setError(res.message || 'Failed to schedule session');
+    } catch (error) {
+      console.error('Error deleting session:', error);
+      setError('Failed to delete session');
     }
   };
 
-  const fetchAllExercises = async () => {
-    const res = await fetch('http://localhost:4000/api/exercises');
-    setAllExercises(await res.json());
-  };
+  const onDragEnd = async (result: DropResult) => {
+    if (!result.destination) return;
 
-  const handleAddExercise = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAddExerciseError('');
-    if (!addExerciseForm.exercise_id || !addExerciseForm.planned_sets || !addExerciseForm.planned_reps) {
-      setAddExerciseError('All fields required');
-      return;
-    }
-    const res = await fetch(`http://localhost:4000/api/workouts/${detailsModal?.session.session_id}/exercises`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ exercises: [{
-        exercise_id: addExerciseForm.exercise_id,
-        planned_sets: addExerciseForm.planned_sets,
-        planned_reps: addExerciseForm.planned_reps
-      }] })
-    });
-    const data = await res.json();
-    if (data.message === 'Exercises added.') {
-      setShowAddExercise(false);
-      setAddExerciseForm({ exercise_id: '', planned_sets: '', planned_reps: '' });
-      openDetails(detailsModal!.session);
-    } else {
-      setAddExerciseError(data.message || 'Failed to add exercise');
-    }
-  };
+    const sourceIndex = result.source.index;
+    const destIndex = result.destination.index;
 
-  const handleLog = async (e: React.FormEvent, session_detail_id: number) => {
-    e.preventDefault();
-    setLogError('');
-    const res = await fetch('http://localhost:4000/api/workouts/log', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        session_detail_id,
-        actual_sets: logForm.actual_sets,
-        actual_reps: logForm.actual_reps,
-        weight_kg: logForm.weight_kg,
-        notes: logForm.notes
-      })
-    });
-    const data = await res.json();    if (data.message === 'Workout logged.') {
-      // Generate new summary
-      await fetch('http://localhost:4000/api/summary/generate', {
+    const reorderedSessions = Array.from(sessions);
+    const [removed] = reorderedSessions.splice(sourceIndex, 1);
+    reorderedSessions.splice(destIndex, 0, removed);
+
+    setSessions(reorderedSessions);
+
+    try {
+      await fetch('http://localhost:4000/api/workouts/reorder', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          user_id: user?.user_id,
-          period_type: 'weekly',
-          period_start: new Date().toISOString().slice(0, 10)
+          session_id: parseInt(result.draggableId),
+          new_position: destIndex
         })
       });
-      
-      setShowLogForm(null);
-      setLogForm({ actual_sets: '', actual_reps: '', weight_kg: '', notes: '' });
-      openDetails(detailsModal!.session);
-      triggerRefresh();
-    } else {
-      setLogError(data.message || 'Failed to log workout');
+    } catch (error) {
+      console.error('Error reordering sessions:', error);
+      fetchSessions();
     }
   };
 
-  const formatDate = (dateStr: string) => {
+  const formatDate = (dateStr: string): string => {
     const d = new Date(dateStr);
-    return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    return d.toLocaleDateString('en-US', {
+      weekday: 'short',
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    }).replace(/\b0(\d)\b/g, '$1');
   };
 
-  const handleReorderClick = (idx: number) => {
-    if (selectedForMove === null) {
-      setSelectedForMove(idx);
-    } else if (selectedForMove !== idx) {
-      // Move the selected exercise to the new position
-      const reordered = Array.from(sessionDetails);
-      const [removed] = reordered.splice(selectedForMove, 1);
-      reordered.splice(idx, 0, removed);
-      setSessionDetails(reordered);
-      setSelectedForMove(null);
-      // TODO: Optionally persist new order to backend
-    } else {
-      setSelectedForMove(null);
-    }
-  };
-
-  const editExercise = (detail: SessionDetail) => {
-    // TODO: Implement edit modal logic
-    // For now, just a stub
-  };
-
-  const onDragEnd = (result: DropResult) => {
-    if (!result.destination) return;
-    const reordered = Array.from(sessionDetails);
-    const [removed] = reordered.splice(result.source.index, 1);
-    reordered.splice(result.destination.index, 0, removed);
-    setSessionDetails(reordered);
-    // TODO: Optionally persist new order to backend
-  };
-
-  const handleEditSave = () => {
-    // TODO: Persist edit to backend
-    if (editExerciseDetail) {
-      setSessionDetails(details => details.map(d => d.session_detail_id === editExerciseDetail.session_detail_id ? {
-        ...d,
-        planned_sets: Number(editForm.planned_sets),
-        planned_reps: Number(editForm.planned_reps),
-        description: editForm.notes
-      } : d));
-      setEditExerciseDetail(null);
-    }
-  };
-
-  const handleEditClick = (detail: SessionDetail) => {
-    setEditExerciseDetail(detail);
-    setEditForm({
-      planned_sets: detail.planned_sets.toString(),
-      planned_reps: detail.planned_reps.toString(),
-      notes: detail.description || ''
+  const calculateWeeklyStreak = (sessions: Session[]): number => {
+    const now = new Date();
+    const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    
+    const completedThisWeek = sessions.filter(session => {
+      const sessionDate = new Date(session.scheduled_date);
+      return session.completed && sessionDate >= oneWeekAgo && sessionDate <= now;
     });
+
+    return completedThisWeek.length;
   };
 
-  const handleDeleteSession = (session_id: number) => {
-    setDeleteSessionConfirm(session_id);
+  const calculateAverageDuration = (sessions: Session[]): number => {
+    const completedSessions = sessions.filter(s => s.completed);
+    if (completedSessions.length === 0) return 0;
+
+    const totalDuration = sessionLogs.reduce((total, log) => {
+      return total + (log.duration_seconds || 0);
+    }, 0);
+
+    return Math.round(totalDuration / (60 * completedSessions.length));
   };
 
-  const confirmDeleteSession = async () => {
-    if (deleteSessionConfirm) {
-      await fetch(`http://localhost:4000/api/workouts/${deleteSessionConfirm}`, { method: 'DELETE' });
-      fetchSessions();
+  const fetchAllExercises = async () => {
+    try {
+      const res = await fetch('http://localhost:4000/api/exercises');
+      setAllExercises(await res.json());
+    } catch (error) {
+      console.error('Error fetching exercises:', error);
+      setError('Failed to load exercises');
+    }
+  };
+
+  const openLogModal = (exerciseId: number) => {
+    setLogExerciseId(exerciseId);
+    setLogForm({ actual_sets: '', actual_reps: '', weight_kg: '', notes: '' });
+    setShowLogModal(true);
+  };
+
+  const handleSubmitLog = async () => {
+    if (!logExerciseId || !logForm.actual_sets || !logForm.actual_reps) return;
+    try {
+      const detail = sessionDetails.find(d => d.exercise_id === logExerciseId);
+      if (!detail) return;
+      const res = await fetch('http://localhost:4000/api/workouts/log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_detail_id: detail.session_detail_id,
+          actual_sets: parseInt(logForm.actual_sets),
+          actual_reps: parseInt(logForm.actual_reps),
+          weight_kg: parseFloat(logForm.weight_kg) || 0,
+          duration_seconds: 0,
+          notes: logForm.notes || ''
+        })
+      });
+      setShowLogModal(false);
+      setLogExerciseId(null);
+      setLogForm({ actual_sets: '', actual_reps: '', weight_kg: '', notes: '' });
+      if (detailsModal?.session) openDetails(detailsModal.session);
+    } catch (e) {
+      alert('Failed to log set');
+    }
+  };
+
+  const handleCompleteSession = async () => {
+    if (!detailsModal?.session) return;
+    setCompletingSession(true);
+    try {
+      await fetch(`http://localhost:4000/api/workouts/${detailsModal.session.session_id}/complete`, { method: 'PATCH' });
       setDetailsModal(null);
-      setDeleteSessionConfirm(null);
-      triggerRefresh();
-    }
-  };
-
-  const handleDeleteExercise = (session_detail_id: number) => {
-    setDeleteExerciseConfirm(session_detail_id);
-  };
-
-  const confirmDeleteExercise = async () => {
-    if (deleteExerciseConfirm) {
-      await fetch(`http://localhost:4000/api/workouts/details/${deleteExerciseConfirm}`, { method: 'DELETE' });
-      if (detailsModal) openDetails(detailsModal.session);
-      setDeleteExerciseConfirm(null);
-    }
-  };
-
-  const handleDeleteLog = async (log_id: number) => {
-    setDeleteLogConfirm(log_id);
-  };
-
-  const confirmDeleteLog = async () => {
-    if (deleteLogConfirm) {
-      await fetch(`http://localhost:4000/api/workouts/logs/${deleteLogConfirm}`, { method: 'DELETE' });
-      if (detailsModal) openDetails(detailsModal.session);
-      setDeleteLogConfirm(null);
-    }
-  };
-
-  const canMarkCompleted =
-    detailsModal?.session &&
-    !detailsModal.session.completed &&
-    sessionDetails.length > 0 &&
-    sessionDetails.every(detail => sessionLogs.some(log => log.session_detail_id === detail.session_detail_id));
-
-  const handleMarkCompleted = async () => {
-    if (!detailsModal) return;
-    setCompleteError('');
-    const res = await api.markSessionCompleted(detailsModal.session.session_id);
-    if (res.message === 'Session marked as completed.') {
-      // Refresh session list and details
       fetchSessions();
-      openDetails({ ...detailsModal.session, completed: true });
-      // Regenerate summary for the current week and update global state
-      if (user) {
-        await summaryStore.refreshSummary(user.user_id);
-      }
-    } else {
-      setCompleteError(res.message || 'Failed to mark as completed');
+      triggerRefresh();
+    } catch (e) {
+      alert('Failed to complete session');
     }
+    setCompletingSession(false);
   };
 
-  // Add a grid style for columns
-  const exerciseGrid = {
-    display: 'grid',
-    gridTemplateColumns: '32px 56px 180px 80px 80px 120px 1fr 320px',
-    alignItems: 'center',
-    gap: '0 24px',
-    minHeight: 36,
-    width: '100%',
-    maxWidth: 1400,
-    margin: '0 auto',
+  const allExercisesLogged = sessionDetails.length > 0 && sessionDetails.every(detail => sessionLogs.some(log => log.session_detail_id === detail.session_detail_id));
+
+  const getTodaysCompletedCount = () => {
+    const today = new Date().toISOString().slice(0, 10);
+    return sessions.filter(s => s.scheduled_date.slice(0, 10) === today && s.completed).length;
   };
-  const cellStyle = {
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-    padding: '0 2px',
-    fontSize: 15,
+
+  const handleAddExercise = async () => {
+    if (!detailsModal || !detailsModal.session || !addExerciseForm.exercise_id || !addExerciseForm.planned_sets || !addExerciseForm.planned_reps) return;
+    setAddExerciseLoading(true);
+    try {
+      await addExercisesToSession(detailsModal.session.session_id, {
+        exercises: [{
+          exercise_id: parseInt(addExerciseForm.exercise_id),
+          planned_sets: parseInt(addExerciseForm.planned_sets),
+          planned_reps: parseInt(addExerciseForm.planned_reps)
+        }]
+      });
+      setShowAddExerciseModal(false);
+      setAddExerciseForm({ exercise_id: '', planned_sets: '', planned_reps: '' });
+      openDetails(detailsModal.session);
+    } catch (e) {
+      setError('Failed to add exercise.');
+    }
+    setAddExerciseLoading(false);
   };
-  const actionCol = {
-    display: 'flex',
-    flexDirection: 'row' as 'row',
-    gap: 18,
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    minWidth: 240,
-  };
-  const btnBase = {
-    width: 80,
-    height: 36,
-    fontSize: 15,
-    borderRadius: 6,
-    border: '2px solid',
-    background: 'transparent',
-    transition: 'background 0.2s, color 0.2s',
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-  };
-  const btnEdit = {
-    ...btnBase,
-    borderColor: '#36c',
-    color: '#36c',
-  };
-  const btnDelete = {
-    ...btnBase,
-    borderColor: '#e44',
-    color: '#e44',
-  };
-  const btnLog = {
-    ...btnBase,
-    borderColor: '#aaa',
-    color: '#aaa',
-  };
-  const dragHandleStyle = {
-    cursor: 'grab',
-    fontSize: 20,
-    color: '#888',
-    padding: '0 4px',
-    userSelect: 'none' as 'none',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 32,
-    width: 32,
-  };
-  const exerciseBlockStyle = {
-    boxShadow: '0 2px 8px 0 #0002',
-    borderRadius: 8,
-    marginBottom: 12,
-    background: '#232326',
-    overflow: 'hidden',
+
+  const handleDeleteLog = async (logId: number) => {
+    try {
+      await fetch(`http://localhost:4000/api/workouts/log/${logId}`, { method: 'DELETE' });
+      if (detailsModal?.session) openDetails(detailsModal.session);
+    } catch (e) {
+      alert('Failed to delete log');
+    }
   };
 
   return (
-    <div className="dashboard-bg">
+    <PageContainer>
       <Navbar />
-      <div className="dashboard-content">
-        <h2 className="dashboard-title">Your Workout Sessions</h2>
-        <div className="dashboard-cards">
-          {loading ? <div>Loading...</div> : sessions.length === 0 ? <div>No sessions yet.</div> : sessions.map(session => (
-            <div className="dashboard-card" key={session.session_id}>
-              <h3>Session #{session.session_id}</h3>
-              <div className="dashboard-value">Date: {formatDate(session.scheduled_date)}</div>
-              <div className="dashboard-value">Type: {session.type || '-'}</div>
-              <div className="dashboard-value">Notes: {session.notes || '-'}</div>
-              <div className="dashboard-value">Completed: {session.completed ? 'Yes' : 'No'}</div>
-              <button className="btn-primary" onClick={() => openDetails(session)}>View Details</button>
-              <button className="btn-outline" style={{ marginLeft: 8 }} onClick={() => handleDeleteSession(session.session_id)}>Delete</button>
-            </div>
-          ))}
-        </div>
-        <div className="dashboard-cta">
-          <button className="btn-primary" onClick={() => setShowForm(true)}>Schedule New Session</button>
-        </div>
-        {showForm && (
-          <div className="modal-bg">
-            <div className="auth-card">
-              <h3>Schedule Workout Session</h3>
-              <form onSubmit={handleSchedule}>
-                <input type="date" value={formDate} onChange={e => setFormDate(e.target.value)} required />
-                <select value={formType} onChange={e => setFormType(e.target.value)} required>
-                  {sessionTypes.map(type => <option key={type} value={type}>{type}</option>)}
-                </select>
-                <input type="text" value={formNotes} onChange={e => setFormNotes(e.target.value)} placeholder="Notes (optional)" />
-                <button className="btn-primary" type="submit" disabled={!formDate}>Create</button>
-                <button className="btn-outline" type="button" onClick={() => setShowForm(false)}>Cancel</button>
-                {error && <div className="error">{error}</div>}
-              </form>
-            </div>
-          </div>
-        )}
-        {/* Delete session modal at root */}
-        {deleteSessionConfirm && (
-          <div className="modal-bg">
-            <div className="auth-card" style={{ maxWidth: 340, textAlign: 'center' }}>
-              <h3>Delete Session?</h3>
-              <p style={{ margin: '16px 0', color: '#e44' }}>Are you sure you want to delete this session and all its data? This cannot be undone.</p>
-              <div style={{ display: 'flex', gap: 16, justifyContent: 'center', marginTop: 16 }}>
-                <button className="btn-outline" style={{ borderColor: '#e44', color: '#e44', minWidth: 80 }} onClick={confirmDeleteSession}>Delete</button>
-                <button className="btn-outline" style={{ minWidth: 80 }} onClick={() => setDeleteSessionConfirm(null)}>Cancel</button>
-              </div>
-            </div>
-          </div>
-        )}
-        {/* Delete exercise modal at root */}
-        {deleteExerciseConfirm && (
-          <div className="modal-bg">
-            <div className="auth-card" style={{ maxWidth: 340, textAlign: 'center' }}>
-              <h3>Delete Exercise?</h3>
-              <p style={{ margin: '16px 0', color: '#e44' }}>Are you sure you want to delete this exercise and all its logs? This cannot be undone.</p>
-              <div style={{ display: 'flex', gap: 16, justifyContent: 'center', marginTop: 16 }}>
-                <button className="btn-outline" style={{ borderColor: '#e44', color: '#e44', minWidth: 80 }} onClick={confirmDeleteExercise}>Delete</button>
-                <button className="btn-outline" style={{ minWidth: 80 }} onClick={() => setDeleteExerciseConfirm(null)}>Cancel</button>
-              </div>
-            </div>
-          </div>
-        )}
-        {/* Delete log modal at root */}
-        {deleteLogConfirm && (
-          <div className="modal-bg">
-            <div className="auth-card" style={{ maxWidth: 340, textAlign: 'center' }}>
-              <h3>Delete Log Entry?</h3>
-              <p style={{ margin: '16px 0', color: '#e44' }}>Are you sure you want to delete this log entry? This cannot be undone.</p>
-              <div style={{ display: 'flex', gap: 16, justifyContent: 'center', marginTop: 16 }}>
-                <button className="btn-outline" style={{ borderColor: '#e44', color: '#e44', minWidth: 80 }} onClick={confirmDeleteLog}>Delete</button>
-                <button className="btn-outline" style={{ minWidth: 80 }} onClick={() => setDeleteLogConfirm(null)}>Cancel</button>
-              </div>
-            </div>
-          </div>
-        )}
-        {detailsModal?.open && (
-          <div className="modal-bg">
-            <div className="auth-card" style={{ maxWidth: '1400px', minWidth: 700, textAlign: 'left' }}>
-              <h3>Session Details</h3>
-              <div><b>Date:</b> {formatDate(detailsModal.session.scheduled_date)}</div>
-              <div><b>Type:</b> {detailsModal.session.type || '-'}</div>
-              <div><b>Notes:</b> {detailsModal.session.notes || '-'}</div>
-              <div><b>Completed:</b> {detailsModal.session.completed ? 'Yes' : 'No'}</div>
-              {canMarkCompleted && (
-                <button className="btn-primary" style={{ margin: '16px 0 0 0' }} onClick={handleMarkCompleted}>Mark as Completed</button>
-              )}
-              {completeError && <div className="error" style={{ marginTop: 8 }}>{completeError}</div>}
-              <div style={{ margin: '18px 0 8px 0', fontWeight: 600 }}>
-                Exercises:
-              </div>
-              <div style={{ ...exerciseGrid, fontWeight: 700, color: '#aaa', background: 'none', border: 'none', marginBottom: 4, maxWidth: 1400, width: '100%' }}>
-                <div style={cellStyle}></div> {/* Reorder icon col */}
-                <div style={cellStyle}>Type</div>
-                <div style={cellStyle}>Name</div>
-                <div style={cellStyle}>Sets</div>
-                <div style={cellStyle}>Reps</div>
-                <div style={cellStyle}>Weight</div>
-                <div style={cellStyle}>Note</div>
-                <div style={{ ...cellStyle, textAlign: 'center' }}>Actions</div>
-              </div>
-              <div style={{ width: '100%', maxWidth: 1400, margin: '0 auto' }}>
-                <FlipMove duration={350} easing="ease-in-out">
-                  {sessionDetails.map((detail, idx) => {
-                    const logs = sessionLogs.filter(l => l.session_detail_id === detail.session_detail_id);
-                    const isSelected = selectedForMove === idx;
-                    return (
+      <div style={{ marginTop: '2.5rem', marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+        <h2 className={styles.dashboardTitle} style={{ textAlign: 'center' }}>Workout Tracking</h2>
+        <button className={styles.scheduleBtn} style={{ alignSelf: 'center' }} onClick={() => setShowForm(true)}>
+          <HiPlusSm /> Schedule Workout
+        </button>
+      </div>
+
+      <CardGrid className={styles.statsGrid}>
+        <StatCard 
+          value={workoutStats.totalWorkouts}
+          label="Total Workouts"
+          icon={<FaDumbbell />}
+          className={styles.statCard}
+        />
+        <StatCard 
+          value={getTodaysCompletedCount()}
+          label="Today's Workout"
+          icon={<FaFire />}
+          className={styles.statCard}
+        />
+        <StatCard 
+          value={`${workoutStats.weeklyStreak} weeks`}
+          label="Current Streak"
+          icon={<FaTrophy />}
+          className={styles.statCard}
+        />
+        <StatCard 
+          value={`${workoutStats.avgDuration} min`}
+          label="Avg. Duration"
+          icon={<FaClock />}
+          className={styles.statCard}
+        />
+      </CardGrid>
+
+      <DragDropContext onDragEnd={onDragEnd}>
+        <StrictModeDroppable droppableId="sessions">
+          {(provided: DroppableProvided) => (
+            <div
+              {...provided.droppableProps}
+              ref={provided.innerRef}
+              className={styles.cardGrid}
+            >
+              {loading ? (
+                <Card className={styles.loadingCard}>
+                  <div className={styles.loader}>Loading...</div>
+                </Card>
+              ) : sessions.length === 0 ? (
+                <Card className={styles.emptyCard}>
+                  <p>No workouts scheduled. Start by scheduling your first workout!</p>
+                  <button className={styles.scheduleBtn} onClick={() => setShowForm(true)}>
+                    <HiPlusSm /> Schedule First Workout
+                  </button>
+                </Card>
+              ) : (
+                [...sessions].sort((a, b) => new Date(a.scheduled_date).getTime() - new Date(b.scheduled_date).getTime()).map((session, index) => (
+                  <Draggable 
+                    key={session.session_id} 
+                    draggableId={session.session_id.toString()} 
+                    index={index}
+                  >
+                    {(dragProvided: DraggableProvided, snapshot) => (
                       <div
-                        key={detail.session_detail_id}
-                        style={{
-                          ...exerciseBlockStyle,
-                          width: '100%',
-                          boxSizing: 'border-box',
-                          border: isSelected ? '2px solid #e66' : 'none',
-                          background: isSelected ? '#29292c' : exerciseBlockStyle.background,
-                          marginBottom: 18,
-                          boxShadow: '0 2px 8px 0 #0002',
-                        }}
+                        ref={dragProvided.innerRef}
+                        {...dragProvided.draggableProps}
+                        {...dragProvided.dragHandleProps}
                       >
-                        {/* Plan row */}
-                        <div style={{ ...exerciseGrid, background: 'transparent', borderRadius: '8px 8px 0 0', borderBottom: '1px solid #29292c' }}>
-                          <div style={dragHandleStyle}>
-                            <button
-                              style={{
-                                background: isSelected ? '#e66' : 'transparent',
-                                color: isSelected ? '#fff' : '#888',
-                                border: 'none',
-                                fontSize: 18,
-                                cursor: 'pointer',
-                                width: 28,
-                                height: 28,
-                                borderRadius: 4,
-                              }}
-                              title={selectedForMove === null ? 'Select to move' : isSelected ? 'Cancel move' : 'Move here'}
-                              onClick={() => handleReorderClick(idx)}
-                            >↕</button>
-                          </div>
-                          <div style={{ ...cellStyle, fontWeight: 600, color: '#e66' }}>Plan</div>
-                          <div style={{ ...cellStyle, fontWeight: 700 }}>{detail.name}</div>
-                          <div style={cellStyle}>{detail.planned_sets}</div>
-                          <div style={cellStyle}>{detail.planned_reps}</div>
-                          <div style={cellStyle}></div>
-                          <div style={cellStyle}>{detail.description}</div>
-                          <div style={actionCol}>
-                            <button style={btnEdit} className="btn-outline" onMouseOver={e => e.currentTarget.style.background = '#36c1'} onMouseOut={e => e.currentTarget.style.background = 'transparent'} onClick={() => handleEditClick(detail)}>Edit</button>
-                            <button style={btnDelete} className="btn-outline" onMouseOver={e => e.currentTarget.style.background = '#e441'} onMouseOut={e => e.currentTarget.style.background = 'transparent'} onClick={() => handleDeleteExercise(detail.session_detail_id)}>Delete</button>
-                            <button style={btnLog} className="btn-outline" onMouseOver={e => e.currentTarget.style.background = '#aaa2'} onMouseOut={e => e.currentTarget.style.background = 'transparent'} onClick={() => { setShowLogForm(detail.session_detail_id); setLogForm({ actual_sets: '', actual_reps: '', weight_kg: '', notes: '' }); }}>Log</button>
-                          </div>
-                        </div>
-                        {/* Actual rows: one for each log */}
-                        {logs.map((log, logIdx) => (
-                          <div key={log.log_id} style={{ ...exerciseGrid, background: 'transparent', borderRadius: logIdx === logs.length - 1 ? '0 0 8px 8px' : 0, marginTop: 6 }}>
-                            <div style={dragHandleStyle}></div>
-                            <div style={{ ...cellStyle, fontWeight: 600, color: '#6e6' }}>Actual</div>
-                            <div style={{ ...cellStyle, fontWeight: 700 }}>{detail.name}</div>
-                            <div style={cellStyle}>{log.actual_sets}</div>
-                            <div style={cellStyle}>{log.actual_reps}</div>
-                            <div style={cellStyle}>{log.weight_kg} kg</div>
-                            <div style={cellStyle}>{log.notes}</div>
-                            <div style={actionCol}>
-                              <button style={btnEdit} className="btn-outline" onMouseOver={e => e.currentTarget.style.background = '#36c1'} onMouseOut={e => e.currentTarget.style.background = 'transparent'} onClick={() => {/* TODO: handle edit log */}}>Edit</button>
-                              <button style={btnDelete} className="btn-outline" onMouseOver={e => e.currentTarget.style.background = '#e441'} onMouseOut={e => e.currentTarget.style.background = 'transparent'} onClick={() => handleDeleteLog(log.log_id)}>Delete</button>
+                        <Card className={`${styles.sessionCard} ${snapshot.isDragging ? styles.dragging : ''}`}>
+                          <div className={styles.sessionHeader}>
+                            <div>
+                              <h3 className={`${styles.sessionDate} ${session.completed ? styles.completed : ''}`}>{formatDate(session.scheduled_date)}</h3>
+                              <div className={styles.sessionStatus}>
+                                Status: {session.completed ? <span style={{ color: '#4caf50' }}>Complete</span> : <span style={{ color: '#ff3e3e' }}>Incomplete</span>}
+                              </div>
+                              <p className={styles.sessionType}>{session.type}</p>
+                              {session.notes && (
+                                <p className={styles.sessionNotes}>{session.notes}</p>
+                              )}
+                            </div>
+                            <div className={styles.sessionActions}>
+                              <button 
+                                className={styles.detailsBtn}
+                                onClick={() => openDetails(session)}
+                              >
+                                Details
+                              </button>
+                              <button 
+                                className={styles.deleteBtn}
+                                onClick={() => setDeleteSessionConfirm(session.session_id)}
+                              >
+                                Delete
+                              </button>
                             </div>
                           </div>
-                        ))}
+                        </Card>
                       </div>
-                    );
-                  })}
-                </FlipMove>
-              </div>
-              <button className="btn-primary" style={{ marginBottom: 16 }} onClick={() => { setShowAddExercise(true); fetchAllExercises(); }}>Add Exercise</button>
-              <button className="btn-outline" style={{ marginTop: 16 }} onClick={() => setDetailsModal(null)}>Close</button>
+                    )}
+                  </Draggable>
+                ))
+              )}
+              {provided.placeholder}
             </div>
-            {editExerciseDetail && (
-              <div className="modal-bg">
-                <div className="auth-card" style={{ maxWidth: 400 }}>
-                  <h3>Edit Exercise</h3>
-                  <input type="number" placeholder="Planned Sets" value={editForm.planned_sets} onChange={e => setEditForm(f => ({ ...f, planned_sets: e.target.value }))} required />
-                  <input type="number" placeholder="Planned Reps" value={editForm.planned_reps} onChange={e => setEditForm(f => ({ ...f, planned_reps: e.target.value }))} required />
-                  <input type="text" placeholder="Notes (optional)" value={editForm.notes} onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))} />
-                  <button className="btn-primary" onClick={handleEditSave}>Save</button>
-                  <button className="btn-outline" onClick={() => setEditExerciseDetail(null)}>Cancel</button>
+          )}
+        </StrictModeDroppable>
+      </DragDropContext>
+
+      {showForm && (
+        <ModalContent title="Schedule Workout" onClose={() => setShowForm(false)}>
+          <GridForm onSubmit={handleSchedule}>
+            <div className={styles.formGroup}>
+              <label>Date</label>
+              <input
+                type="date"
+                value={formDate}
+                onChange={e => setFormDate(e.target.value)}
+                required
+              />
+            </div>
+            <div className={styles.formGroup}>
+              <label>Type</label>
+              <select
+                value={formType}
+                onChange={e => setFormType(e.target.value)}
+                required
+              >
+                {sessionTypes.map(type => (
+                  <option key={type} value={type}>{type}</option>
+                ))}
+              </select>
+            </div>
+            <div className={styles.formGroup}>
+              <label>Notes</label>
+              <textarea
+                value={formNotes}
+                onChange={e => setFormNotes(e.target.value)}
+                rows={3}
+              />
+            </div>
+
+            {error && <div className={styles.error}>{error}</div>}
+            
+            <div className={styles.modalActions}>
+              <button type="submit" className={styles.scheduleBtn}>Schedule</button>
+              <button type="button" className={styles.cancelBtn} onClick={() => setShowForm(false)}>
+                Cancel
+              </button>
+            </div>
+          </GridForm>
+        </ModalContent>
+      )}
+
+      {detailsModal?.open && (
+        <ModalContent 
+          title={`Workout Details - ${formatDate(detailsModal.session.scheduled_date)}`}
+          onClose={() => setDetailsModal(null)}
+        >
+          <div className={styles.exercisesList} style={{ maxWidth: '900px', margin: '0 auto' }}>
+            {sessionDetails.map((detail) => (
+              <div
+                key={detail.session_detail_id}
+                className={styles.exerciseItem}
+                style={{ display: 'flex', flexDirection: 'row', gap: '2.5rem', alignItems: 'flex-start' }}
+              >
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className={styles.exerciseInfoRow}>
+                    <span className={styles.draggableIcon}>
+                      
+                    </span>
+                    <div className={styles.exerciseInfo}>
+                      <div className={styles.exerciseName}>{detail.name}</div>
+                      <div className={styles.exerciseStats}>
+                        <span>{detail.planned_sets} sets</span>
+                        <span>{detail.planned_reps} reps</span>
+                      </div>
+                      {detail.description && <div className={styles.exerciseDescription}>{detail.description}</div>}
+                    </div>
+                  </div>
+                  <div className={styles.exerciseActions}>
+                    {!detailsModal.session.completed && (
+                      <>
+                        <button className={styles.logSetBtn} onClick={() => openLogModal(detail.exercise_id)}>Log Set</button>
+                        <button className={styles.removeBtn} onClick={() => setDeleteExerciseConfirm(detail.session_detail_id)}>Remove</button>
+                      </>
+                    )}
+                  </div>
                 </div>
+                {sessionLogs.filter(log => log.session_detail_id === detail.session_detail_id).length > 0 && (
+                  <div className={styles.realityPerformanceBlock} style={{ flex: 1, minWidth: 0, borderLeft: '1px solid rgba(255,255,255,0.10)', paddingLeft: '2rem' }}>
+                    <div className={styles.realityPerformanceLabel}>Reality performance:</div>
+                    {sessionLogs.filter(log => log.session_detail_id === detail.session_detail_id).map(log => (
+                      <div key={log.log_id} className={styles.exerciseLogItem}>
+                        <span className={styles.logLeft}><strong>{log.actual_sets} sets</strong> x <strong>{log.actual_reps} reps</strong></span>
+                        <span className={styles.logRight}>
+                          <span className={styles.logDraggableIcon}>
+                            
+                          </span>
+                          <span><strong>{log.weight_kg}kg</strong></span>
+                          {log.notes && <span className="logNotes">({log.notes})</span>}
+                          <button className={styles.deleteLogBtn} onClick={() => handleDeleteLog(log.log_id)}><FaTimes /></button>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+            {!detailsModal.session.completed && allExercisesLogged && (
+              <button
+                className={styles.completeSessionBtn}
+                style={{ marginTop: 24, width: '100%' }}
+                onClick={handleCompleteSession}
+                disabled={completingSession}
+              >
+                {completingSession ? 'Completing...' : 'Complete Session'}
+              </button>
+            )}
+            {!detailsModal.session.completed && !allExercisesLogged && (
+              <div style={{ color: '#aaa', marginTop: 16, fontSize: '0.98em' }}>
+                Log at least one set for every exercise to complete this session.
               </div>
             )}
-            {showAddExercise && (
-              <div className="modal-bg">
-                <div className="auth-card" style={{ maxWidth: 400 }}>
-                  <h3>Add Exercise</h3>
-                  <form onSubmit={handleAddExercise}>
-                    <select value={addExerciseForm.exercise_id} onChange={e => {
-                      const ex = allExercises.find(x => x.exercise_id === Number(e.target.value));
-                      setAddExerciseForm(f => ({
-                        ...f,
-                        exercise_id: e.target.value,
-                        planned_sets: ex?.default_sets?.toString() || '',
-                        planned_reps: ex?.default_reps?.toString() || ''
-                      }));
-                    }} required>
-                      <option value="">Select Exercise</option>
-                      {allExercises.map(ex => <option key={ex.exercise_id} value={ex.exercise_id}>{ex.name}</option>)}
-                    </select>
-                    <input type="number" placeholder="Planned Sets" value={addExerciseForm.planned_sets} onChange={e => setAddExerciseForm(f => ({ ...f, planned_sets: e.target.value }))} required />
-                    <input type="number" placeholder="Planned Reps" value={addExerciseForm.planned_reps} onChange={e => setAddExerciseForm(f => ({ ...f, planned_reps: e.target.value }))} required />
-                    <button className="btn-primary" type="submit">Add</button>
-                    <button className="btn-outline" type="button" onClick={() => setShowAddExercise(false)}>Cancel</button>
-                    {addExerciseError && <div className="error">{addExerciseError}</div>}
-                  </form>
-                </div>
-              </div>
-            )}
-            {showLogForm && (
-              <div className="modal-bg">
-                <div className="auth-card" style={{ maxWidth: 400 }}>
-                  <h3>Log Performance</h3>
-                  <form onSubmit={e => handleLog(e, showLogForm)}>
-                    <input type="number" placeholder="Actual Sets" value={logForm.actual_sets} onChange={e => setLogForm(f => ({ ...f, actual_sets: e.target.value }))} required />
-                    <input type="number" placeholder="Actual Reps" value={logForm.actual_reps} onChange={e => setLogForm(f => ({ ...f, actual_reps: e.target.value }))} required />
-                    <input type="number" placeholder="Weight (kg)" value={logForm.weight_kg} onChange={e => setLogForm(f => ({ ...f, weight_kg: e.target.value }))} required />
-                    <input type="text" placeholder="Notes (optional)" value={logForm.notes} onChange={e => setLogForm(f => ({ ...f, notes: e.target.value }))} />
-                    <button className="btn-primary" type="submit">Log</button>
-                    <button className="btn-outline" type="button" onClick={() => setShowLogForm(null)}>Cancel</button>
-                    {logError && <div className="error">{logError}</div>}
-                  </form>
-                </div>
-              </div>
+            {!detailsModal.session.completed && (
+              <button className={styles.addExerciseBtn} style={{ marginTop: 16, width: '100%' }} onClick={() => { setShowAddExerciseModal(true); fetchAllExercises(); }}>
+                Add Exercise
+              </button>
             )}
           </div>
-        )}
-      </div>
-    </div>
+        </ModalContent>
+      )}
+
+      {showAddExerciseModal && (
+        <ModalContent title="Add Exercise to Session" onClose={() => setShowAddExerciseModal(false)}>
+          <div className={styles.exerciseGrid}>
+            {allExercises.map(exercise => (
+              <div 
+                key={exercise.exercise_id} 
+                className={`${styles.exerciseOption} ${addExerciseForm.exercise_id === exercise.exercise_id.toString() ? styles.selected : ''}`}
+                onClick={() => setAddExerciseForm(f => ({
+                  ...f,
+                  exercise_id: exercise.exercise_id.toString(),
+                  planned_sets: exercise.default_sets?.toString() || '',
+                  planned_reps: exercise.default_reps?.toString() || ''
+                }))}
+              >
+                <div className={styles.exerciseName}>{exercise.name}</div>
+                {exercise.description && (
+                  <div className={styles.exerciseDescription}>{exercise.description}</div>
+                )}
+                {addExerciseForm.exercise_id === exercise.exercise_id.toString() && (
+                  <div style={{ color: '#aaa', fontSize: '0.95em', marginTop: 4 }}>
+                    Default: {exercise.default_sets || '-'} sets, {exercise.default_reps || '-'} reps
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginTop: '1rem' }}>
+            <input
+              type="number"
+              min="1"
+              placeholder="Sets"
+              value={addExerciseForm.planned_sets}
+              onChange={e => setAddExerciseForm(f => ({ ...f, planned_sets: e.target.value }))}
+              style={{ width: 80, padding: 8, borderRadius: 6, border: '1px solid #444', background: '#222', color: '#fff' }}
+            />
+            <input
+              type="number"
+              min="1"
+              placeholder="Reps"
+              value={addExerciseForm.planned_reps}
+              onChange={e => setAddExerciseForm(f => ({ ...f, planned_reps: e.target.value }))}
+              style={{ width: 80, padding: 8, borderRadius: 6, border: '1px solid #444', background: '#222', color: '#fff' }}
+            />
+            <button
+              className={styles.addExerciseBtn}
+              onClick={handleAddExercise}
+              disabled={addExerciseLoading || !addExerciseForm.exercise_id || !addExerciseForm.planned_sets || !addExerciseForm.planned_reps}
+            >
+              {addExerciseLoading ? 'Adding...' : 'Add'}
+            </button>
+            <button
+              className={styles.cancelBtn}
+              onClick={() => setShowAddExerciseModal(false)}
+            >
+              Cancel
+            </button>
+          </div>
+        </ModalContent>
+      )}
+
+      {deleteSessionConfirm && (
+        <ModalContent title="Delete Workout" onClose={() => setDeleteSessionConfirm(null)}>
+          <div className={styles.deleteConfirm}>
+            <p>Are you sure you want to delete this workout?</p>
+            <div className={styles.modalActions}>
+              <button 
+                className={styles.deleteBtn}
+                onClick={() => handleDeleteSession(deleteSessionConfirm)}
+              >
+                Delete
+              </button>
+              <button 
+                className={styles.cancelBtn}
+                onClick={() => setDeleteSessionConfirm(null)}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </ModalContent>
+      )}
+
+      {deleteExerciseConfirm && (
+        <ModalContent title="Delete Exercise" onClose={() => setDeleteExerciseConfirm(null)}>
+          <div className={styles.deleteConfirm}>
+            <p>Are you sure you want to remove this exercise?</p>
+            <div className={styles.modalActions}>
+              <button 
+                className={styles.deleteBtn}
+                onClick={() => handleDeleteExercise(deleteExerciseConfirm)}
+              >
+                Delete
+              </button>
+              <button 
+                className={styles.cancelBtn}
+                onClick={() => setDeleteExerciseConfirm(null)}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </ModalContent>
+      )}
+
+      {showLogModal && (
+        <ModalContent title="Log Set">
+          <div className={styles.formGroup}>
+            <label>Sets</label>
+            <input
+              type="number"
+              min="1"
+              value={logForm.actual_sets}
+              onChange={e => setLogForm(f => ({ ...f, actual_sets: e.target.value }))}
+              required
+            />
+          </div>
+          <div className={styles.formGroup}>
+            <label>Reps</label>
+            <input
+              type="number"
+              min="1"
+              value={logForm.actual_reps}
+              onChange={e => setLogForm(f => ({ ...f, actual_reps: e.target.value }))}
+              required
+            />
+          </div>
+          <div className={styles.formGroup}>
+            <label>Weight (kg)</label>
+            <input
+              type="number"
+              min="0"
+              value={logForm.weight_kg}
+              onChange={e => setLogForm(f => ({ ...f, weight_kg: e.target.value }))}
+            />
+          </div>
+          <div className={styles.formGroup}>
+            <label>Notes</label>
+            <textarea
+              value={logForm.notes}
+              onChange={e => setLogForm(f => ({ ...f, notes: e.target.value }))}
+              rows={2}
+            />
+          </div>
+          <div className={styles.modalActions}>
+            <button className={styles.addExerciseBtn} onClick={handleSubmitLog} disabled={!logForm.actual_sets || !logForm.actual_reps}>
+              Log
+            </button>
+            <button className={styles.cancelBtn} onClick={() => setShowLogModal(false)}>
+              Cancel
+            </button>
+          </div>
+        </ModalContent>
+      )}
+    </PageContainer>
   );
 };
 
-export default Workouts; 
+export default Workouts;

@@ -2,6 +2,19 @@ import React, { useEffect, useState } from 'react';
 import Navbar from '../components/NavBar/NavBar';
 import { useAuth } from '../context/AuthContext';
 import { useDashboardRefresh } from '../context/DashboardRefreshContext';
+import { FaUtensils, FaFire, FaDumbbell, FaLeaf } from 'react-icons/fa';
+import { HiPlusSm } from 'react-icons/hi';
+import {
+  PageContainer,
+  PageHeader,
+  CardGrid,
+  Card,
+  ModalContent,
+  GridForm,
+  StatCard
+} from '../components/shared/SharedComponents';
+import styles from './Foods.module.css';
+
 interface Meal {
   meal_id: number;
   log_date: string;
@@ -28,10 +41,14 @@ interface Food {
   serving_type: string;
   image?: string;
 }
+interface MealWithFoods extends Meal {
+  foods: MealFood[];
+}
 
-const Foods: React.FC = () => {  const { user } = useAuth();
+const Foods: React.FC = () => {
+  const { user } = useAuth();
   const { triggerRefresh } = useDashboardRefresh();
-  const [meals, setMeals] = useState<Meal[]>([]);
+  const [meals, setMeals] = useState<MealWithFoods[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ log_date: '', meal_type: 'breakfast' });
@@ -45,17 +62,61 @@ const Foods: React.FC = () => {  const { user } = useAuth();
   const [expandedMeal, setExpandedMeal] = useState<number | null>(null);
   const [mealDetails, setMealDetails] = useState<MealFood[]>([]);
   const [deleteMealId, setDeleteMealId] = useState<number | null>(null);
+  const [dailyTotals, setDailyTotals] = useState({
+    calories: 0,
+    protein: 0,
+    carbs: 0,
+    fat: 0
+  });
 
   useEffect(() => {
     if (user) fetchMeals();
     // eslint-disable-next-line
   }, [user]);
 
+  useEffect(() => {
+    if (meals.length > 0) {
+      const today = new Date().toISOString().slice(0, 10);
+      const todayMeals = meals.filter(m => m.log_date.slice(0, 10) === today);
+      
+      const totals = {
+        calories: 0,
+        protein: 0,
+        carbs: 0,
+        fat: 0
+      };
+
+      todayMeals.forEach(meal => {
+        totals.calories += calculateMealNutrition(meal.foods, 'calories');
+        totals.protein += calculateMealNutrition(meal.foods, 'protein');
+        totals.carbs += calculateMealNutrition(meal.foods, 'carbs');
+        totals.fat += calculateMealNutrition(meal.foods, 'fat');
+      });
+
+      setDailyTotals(totals);
+    }
+  }, [meals]);
+
   const fetchMeals = async () => {
     setLoading(true);
-    const res = await fetch(`http://localhost:4000/api/foods/meals?user_id=${user?.user_id}`);
-    const data = await res.json();
-    setMeals(data);
+    try {
+      // Fetch basic meal data
+      const mealsRes = await fetch(`http://localhost:4000/api/foods/meals?user_id=${user?.user_id}`);
+      const mealsData = await mealsRes.json();
+      
+      // Fetch food details for each meal
+      const mealsWithFoods = await Promise.all(
+        mealsData.map(async (meal: Meal) => {
+          const foodsRes = await fetch(`http://localhost:4000/api/foods/meals/${meal.meal_id}`);
+          const foodsData = await foodsRes.json();
+          return { ...meal, foods: foodsData };
+        })
+      );
+      
+      setMeals(mealsWithFoods);
+    } catch (error) {
+      console.error('Error fetching meals:', error);
+    }
     setLoading(false);
   };
 
@@ -186,190 +247,260 @@ const Foods: React.FC = () => {  const { user } = useAuth();
     }
   };
 
+  const calculateMealNutrition = (meal: MealFood[], type: 'calories' | 'protein' | 'carbs' | 'fat'): number => {
+    return meal.reduce((total, food) => {
+      const servingMultiplier = food.amount_grams / 100;
+      switch (type) {
+        case 'calories':
+          return total + (food.calories_per_serving * servingMultiplier);
+        case 'protein':
+          return total + (food.protein_per_serving * servingMultiplier);
+        case 'carbs':
+          return total + (food.carbs_per_serving * servingMultiplier);
+        case 'fat':
+          return total + (food.fat_per_serving * servingMultiplier);
+      }
+    }, 0);
+  };
+
   return (
-    <div className="dashboard-bg">
+    <PageContainer>
       <Navbar />
-      <div className="dashboard-content">
-        <h2 className="dashboard-title">Your Meals</h2>
-        <div className="dashboard-cards">
-          {loading ? <div>Loading...</div> : meals.length === 0 ? <div>No meals yet.</div> : meals.map(meal => (
-            <div className="dashboard-card" key={meal.meal_id}>
-              <h3>{meal.meal_type.charAt(0).toUpperCase() + meal.meal_type.slice(1)} - {formatDate(meal.log_date)}</h3>
-              <button className="btn-outline" onClick={() => handleExpandMeal(meal.meal_id)}>
-                {expandedMeal === meal.meal_id ? 'Hide Details' : 'View Details'}
-              </button>
-              <button className="btn-outline" style={{ marginLeft: 8, borderColor: '#e44', color: '#e44' }} onClick={() => handleDeleteMeal(meal.meal_id)}>Delete</button>
-              {expandedMeal === meal.meal_id && (
-                <div style={{ marginTop: 16 }}>
-                  {mealDetails.length === 0 ? <div>No foods in this meal.</div> : (
-                    <table style={{ width: '100%', color: 'var(--text-color)', background: 'transparent' }}>
-                      <thead>
-                        <tr>
-                          <th>Food</th>
-                          <th>Amount (servings)</th>
-                          <th>Serving Type</th>
-                          <th>Calories</th>
-                          <th>Protein</th>
-                          <th>Carbs</th>
-                          <th>Fat</th>
-                          <th>Image</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {mealDetails.map(f => (
-                          <tr key={f.food_id}>
-                            <td>{f.name}</td>
-                            <td>{f.amount_grams}</td>
-                            <td>{f.serving_type}</td>
-                            <td>{((f.calories_per_serving * f.amount_grams)).toFixed(1)}</td>
-                            <td>{((f.protein_per_serving * f.amount_grams)).toFixed(1)}</td>
-                            <td>{((f.carbs_per_serving * f.amount_grams)).toFixed(1)}</td>
-                            <td>{((f.fat_per_serving * f.amount_grams)).toFixed(1)}</td>
-                            <td>{f.image ? <img src={`/Assest/${f.image}`} alt={f.name} style={{ width: 32, height: 32, objectFit: 'cover', borderRadius: 4 }} /> : null}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  )}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-        <div className="dashboard-cta">
-          <button className="btn-primary" onClick={() => setShowForm(true)}>Log New Meal</button>
-        </div>
-        {showForm && (
-          <div className="modal-bg">
-            <div className="auth-card">
-              <h3>Log Meal</h3>
-              <form onSubmit={handleLogMeal}>
-                <input type="date" value={form.log_date} onChange={e => setForm(f => ({ ...f, log_date: e.target.value }))} required />
-                <select value={form.meal_type} onChange={e => setForm(f => ({ ...f, meal_type: e.target.value }))}>
-                  <option value="breakfast">Breakfast</option>
-                  <option value="lunch">Lunch</option>
-                  <option value="dinner">Dinner</option>
-                  <option value="snack">Snack</option>
-                </select>
-                <div style={{ margin: '16px 0' }}>
-                  <button type="button" className="btn-outline" onClick={handleAddFood}>Add Food</button>
-                </div>
-                {mealFoods.length > 0 && (
-                  <div style={{ marginBottom: 16 }}>
-                    <table style={{ width: '100%', color: 'var(--text-color)', background: 'transparent' }}>
-                      <thead>
-                        <tr>
-                          <th>Food</th>
-                          <th>Amount (g)</th>
-                          <th>Calories</th>
-                          <th>Protein</th>
-                          <th>Carbs</th>
-                          <th>Fat</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {mealFoods.map((f, i) => (
-                          <tr key={i}>
-                            <td>{f.food.name}</td>
-                            <td>{f.amount_grams}</td>
-                            <td>{((f.food.calories_per_serving * Number(f.amount_grams)) / 100).toFixed(1)}</td>
-                            <td>{((f.food.protein_per_serving * Number(f.amount_grams)) / 100).toFixed(1)}</td>
-                            <td>{((f.food.carbs_per_serving * Number(f.amount_grams)) / 100).toFixed(1)}</td>
-                            <td>{((f.food.fat_per_serving * Number(f.amount_grams)) / 100).toFixed(1)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-                <button className="btn-primary" type="submit" disabled={!form.log_date || mealFoods.length === 0}>Log Meal</button>
-                <button className="btn-outline" type="button" onClick={() => { setShowForm(false); setMealFoods([]); }}>Cancel</button>
-                {error && <div className="error">{error}</div>}
-              </form>
-            </div>
-          </div>
-        )}
-        {showFoodModal && (
-          <div className="modal-bg">
-            <div className="auth-card" style={{ maxWidth: 600 }}>
-              <h3>Choose Food</h3>
-              <input
-                type="text"
-                placeholder="Search food..."
-                value={foodSearch}
-                onChange={e => setFoodSearch(e.target.value)}
-                style={{ marginBottom: 12 }}
-              />
-              <div style={{ maxHeight: 200, overflowY: 'auto', marginBottom: 12 }}>
-                {foods.filter(f => f.name.toLowerCase().includes(foodSearch.toLowerCase())).map(f => (
-                  <div
-                    key={f.food_id}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 12,
-                      padding: 8,
-                      cursor: 'pointer',
-                      background: selectedFood?.food_id === f.food_id ? 'var(--primary-color)' : 'transparent',
-                      borderRadius: 6
-                    }}
-                    onClick={() => handleSelectFood(f)}
-                  >
-                    {f.image && (
-                      <img
-                        src={`/Assest/${f.image}`}
-                        alt={f.name}
-                        style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 6, background: '#222' }}
-                      />
-                    )}
-                    <div>
-                      <b>{f.name}</b>
-                      <span style={{ color: '#aaa', fontSize: 13, marginLeft: 8 }}>({f.calories_per_serving} kcal/serving)</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              {selectedFood && (
-                <div style={{ marginBottom: 12, background: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: 12 }}>
-                  <div><b>{selectedFood.name}</b></div>
-                  {selectedFood.image && (
-                    <img
-                      src={`/Assest/${selectedFood.image}`}
-                      alt={selectedFood.name}
-                      style={{ width: 120, height: 120, objectFit: 'cover', borderRadius: 8, margin: '8px 0' }}
-                    />
-                  )}
-                  <div><b>Serving:</b> {selectedFood.serving_type}</div>
-                  <div>Per Serving: {selectedFood.calories_per_serving} kcal | {selectedFood.protein_per_serving}g protein | {selectedFood.carbs_per_serving}g carbs | {selectedFood.fat_per_serving}g fat</div>
-                  <input
-                    type="number"
-                    placeholder="Amount (servings)"
-                    value={amountGrams}
-                    onChange={e => setAmountGrams(e.target.value)}
-                    min={1}
-                    style={{ marginTop: 8 }}
-                  />
-                  <button className="btn-primary" type="button" style={{ marginTop: 8 }} disabled={!amountGrams} onClick={handleAddFoodToMeal}>Add to Meal</button>
-                </div>
-              )}
-              <button className="btn-outline" type="button" onClick={() => setShowFoodModal(false)}>Cancel</button>
-            </div>
-          </div>
-        )}
-        {deleteMealId && (
-          <div className="modal-bg">
-            <div className="auth-card" style={{ maxWidth: 340, textAlign: 'center' }}>
-              <h3>Delete Meal?</h3>
-              <p style={{ margin: '16px 0', color: '#e44' }}>Are you sure you want to delete this meal and all its data? This cannot be undone.</p>
-              <div style={{ display: 'flex', gap: 16, justifyContent: 'center', marginTop: 16 }}>
-                <button className="btn-outline" style={{ borderColor: '#e44', color: '#e44', minWidth: 80 }} onClick={confirmDeleteMeal}>Delete</button>
-                <button className="btn-outline" style={{ minWidth: 80 }} onClick={() => setDeleteMealId(null)}>Cancel</button>
-              </div>
-            </div>
-          </div>
-        )}
+      <div style={{ marginTop: '2.5rem', marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+        <h2 className={styles.dashboardTitle} style={{ textAlign: 'center' }}>Food Log</h2>
+        <button className={styles.logMealBtn} style={{ alignSelf: 'center' }} onClick={() => setShowForm(true)}>
+          <HiPlusSm /> Log New Meal
+        </button>
       </div>
-    </div>
+
+      <CardGrid className={styles.statsGrid}>
+        <StatCard 
+          value={dailyTotals.calories.toFixed(0)}
+          label="Total Calories"
+          icon={<FaFire />}
+        />
+        <StatCard 
+          value={`${dailyTotals.protein.toFixed(1)}g`}
+          label="Protein"
+          icon={<FaDumbbell />}
+        />
+        <StatCard 
+          value={`${dailyTotals.carbs.toFixed(1)}g`}
+          label="Carbs"
+          icon={<FaUtensils />}
+        />
+        <StatCard 
+          value={`${dailyTotals.fat.toFixed(1)}g`}
+          label="Fat"
+          icon={<FaLeaf />}
+        />
+      </CardGrid>
+
+      <CardGrid>
+        {loading ? (
+          <Card className={styles.loadingCard}>
+            <div className={styles.loader}>Loading...</div>
+          </Card>
+        ) : meals.length === 0 ? (
+          <Card className={styles.emptyCard}>
+            <p>No meals logged yet. Start by adding your first meal!</p>
+            <button className="btn-primary" onClick={() => setShowForm(true)}>
+              <HiPlusSm /> Log First Meal
+            </button>
+          </Card>
+        ) : (
+          meals.map(meal => (
+            <Card key={meal.meal_id} className={styles.mealCard}>
+              <div className={styles.mealHeader}>
+                <div>
+                  <h3 className={styles.mealType}>
+                    {meal.meal_type.charAt(0).toUpperCase() + meal.meal_type.slice(1)}
+                  </h3>
+                  <p className={styles.mealDate}>{formatDate(meal.log_date)}</p>
+                </div>
+                <div className={styles.mealActions}>
+                  <button 
+                    className={styles.detailsBtn}
+                    onClick={() => handleExpandMeal(meal.meal_id)}
+                  >
+                    {expandedMeal === meal.meal_id ? 'Hide Details' : 'Show Details'}
+                  </button>
+                  <button 
+                    className={styles.deleteBtn}
+                    onClick={() => handleDeleteMeal(meal.meal_id)}
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+              
+              {expandedMeal === meal.meal_id && (
+                <div className={styles.mealDetails}>
+                  {mealDetails.map((food, idx) => (
+                    <div key={idx} className={styles.foodItem}>
+                      <div className={styles.foodInfo}>
+                        <span className={styles.foodName}>{food.name}</span>
+                        <span className={styles.foodAmount}>{food.amount_grams}g</span>
+                      </div>
+                      <div className={styles.foodNutrition}>
+                        <span>{(food.calories_per_serving * food.amount_grams / 100).toFixed(0)} cal</span>
+                        <span>{(food.protein_per_serving * food.amount_grams / 100).toFixed(1)}g protein</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card>
+          ))
+        )}
+      </CardGrid>
+
+      {showForm && (
+        <ModalContent title="Log New Meal">
+          <GridForm onSubmit={handleLogMeal}>
+            <div className={styles.formGroup} style={{ gridColumn: '1 / -1' }}>
+              <label>Date</label>
+              <input
+                type="date"
+                value={form.log_date}
+                onChange={e => setForm({ ...form, log_date: e.target.value })}
+                required
+              />
+            </div>
+            <div className={styles.formGroup} style={{ gridColumn: '1 / -1' }}>
+              <label>Meal Type</label>
+              <select
+                value={form.meal_type}
+                onChange={e => setForm({ ...form, meal_type: e.target.value })}
+                required
+              >
+                <option value="breakfast">Breakfast</option>
+                <option value="lunch">Lunch</option>
+                <option value="dinner">Dinner</option>
+                <option value="snack">Snack</option>
+              </select>
+            </div>
+
+            <div className={styles.foodsList}>
+              {mealFoods.map((mealFood, idx) => (
+                <div key={idx} className={styles.foodItem}>
+                  <span>{mealFood.food.name}</span>
+                  <span>{mealFood.amount_grams}g</span>
+                  <button
+                    type="button"
+                    className="btn-icon-danger"
+                    onClick={() => setMealFoods(foods => foods.filter((_, i) => i !== idx))}
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+              <button type="button" className={styles.addFoodBtn} onClick={handleAddFood}>
+                <HiPlusSm /> Add Food
+              </button>
+            </div>
+
+            {error && <div className={styles.error}>{error}</div>}
+            
+            <div className={styles.modalActions}>
+              <button type="submit" className="btn-primary">Save Meal</button>
+              <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>
+                Cancel
+              </button>
+            </div>
+          </GridForm>
+        </ModalContent>
+      )}
+
+      {showFoodModal && (
+        <ModalContent title="Add Food to Meal">
+          <div className={styles.foodSearchGrid}>
+            <input
+              type="text"
+              placeholder="Search foods..."
+              value={foodSearch}
+              onChange={e => setFoodSearch(e.target.value)}
+              className={styles.searchInput}
+            />
+          </div>
+
+          <div className={styles.foodsGrid}>
+            {foods
+              .filter(food => 
+                food.name.toLowerCase().includes(foodSearch.toLowerCase())
+              )
+              .map(food => (
+                <div 
+                  key={food.food_id} 
+                  className={`${styles.foodOption} ${selectedFood?.food_id === food.food_id ? styles.selected : ''}`}
+                  onClick={() => handleSelectFood(food)}
+                >
+                  <div className={styles.foodOptionInfo}>
+                    <span className={styles.foodName}>{food.name}</span>
+                    <span className={styles.foodNutrition}>
+                      {food.calories_per_serving} cal | {food.protein_per_serving}g protein
+                    </span>
+                  </div>
+                </div>
+              ))
+            }
+          </div>
+
+          {selectedFood && (
+            <div className={styles.formGroup} style={{ maxWidth: 'none', margin: '1rem 0' }}>
+              <label>Amount ({selectedFood.serving_type})</label>
+              <input
+                type="number"
+                value={amountGrams}
+                onChange={e => setAmountGrams(e.target.value)}
+                min="0"
+                required
+              />
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginTop: '1rem' }}>
+            <button
+              className={styles.addFoodToMealBtn}
+              onClick={handleAddFoodToMeal}
+              disabled={!selectedFood || !amountGrams}
+              style={{ flexGrow: 1 }}
+            >
+              Add To Meal
+            </button>
+            <button
+              className={styles.cancelBtn}
+              onClick={() => setShowFoodModal(false)}
+              style={{ flexGrow: 1 }}
+            >
+              Close
+            </button>
+          </div>
+        </ModalContent>
+      )}
+
+      {deleteMealId && (
+        <ModalContent title="Delete Meal" onClose={() => setDeleteMealId(null)}>
+          <div className={styles.deleteConfirm}>
+            <p>Are you sure you want to delete this meal?</p>
+            <div className={styles.modalActions}>
+              <button 
+                className="btn-danger"
+                onClick={confirmDeleteMeal}
+              >
+                Delete
+              </button>
+              <button 
+                className="btn-secondary"
+                onClick={() => setDeleteMealId(null)}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </ModalContent>
+      )}
+    </PageContainer>
   );
 };
 
