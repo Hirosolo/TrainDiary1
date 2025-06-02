@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import { DragDropContext, Draggable, DropResult, DroppableProvided, DraggableProvided } from '@hello-pangea/dnd';
-import { FaDumbbell, FaFire, FaClock, FaTrophy } from 'react-icons/fa';
+import { DragDropContext, Draggable, DropResult, DroppableProvided, DraggableProvided, Droppable } from '@hello-pangea/dnd';
+import { FaDumbbell, FaFire, FaClock, FaTrophy, FaTimes, FaGripVertical } from 'react-icons/fa';
 import { HiPlusSm } from 'react-icons/hi';
 import Navbar from '../components/NavBar/NavBar';
 import { StrictModeDroppable } from '../components/StrictModeDroppable';
@@ -17,6 +17,7 @@ import {
   StatCard
 } from '../components/shared/SharedComponents';
 import styles from './Workouts.module.css';
+import { addExercisesToSession } from '../api';
 
 interface Session {
   session_id: number;
@@ -108,6 +109,14 @@ const Workouts: React.FC = () => {
     weeklyStreak: 0,
     avgDuration: 0
   });
+  const [addExerciseLoading, setAddExerciseLoading] = useState(false);
+  const [showAddExerciseModal, setShowAddExerciseModal] = useState(false);
+  const [showLogModal, setShowLogModal] = useState(false);
+  const [logForm, setLogForm] = useState({ actual_sets: '', actual_reps: '', weight_kg: '', notes: '' });
+  const [logExerciseId, setLogExerciseId] = useState<number | null>(null);
+  const [completingSession, setCompletingSession] = useState(false);
+  const [reorderExerciseId, setReorderExerciseId] = useState<number | null>(null);
+  const [reorderLogId, setReorderLogId] = useState<number | null>(null);
 
   useEffect(() => {
     if (user && !authLoading) fetchSessions();
@@ -248,12 +257,12 @@ const Workouts: React.FC = () => {
 
   const formatDate = (dateStr: string): string => {
     const d = new Date(dateStr);
-    return d.toLocaleDateString('en-US', { 
+    return d.toLocaleDateString('en-US', {
       weekday: 'short',
-      year: 'numeric', 
-      month: 'short', 
-      day: 'numeric' 
-    });
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    }).replace(/\b0(\d)\b/g, '$1');
   };
 
   const calculateWeeklyStreak = (sessions: Session[]): number => {
@@ -289,80 +298,132 @@ const Workouts: React.FC = () => {
     }
   };
 
-  const handleStartLog = async (detailId: number) => {
-    if (detailsModal?.session.completed) {
-      return;
-    }
+  const openLogModal = (exerciseId: number) => {
+    setLogExerciseId(exerciseId);
+    setLogForm({ actual_sets: '', actual_reps: '', weight_kg: '', notes: '' });
+    setShowLogModal(true);
+  };
 
+  const handleSubmitLog = async () => {
+    if (!logExerciseId || !logForm.actual_sets || !logForm.actual_reps) return;
     try {
+      const detail = sessionDetails.find(d => d.exercise_id === logExerciseId);
+      if (!detail) return;
       const res = await fetch('http://localhost:4000/api/workouts/log', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          session_detail_id: detailId,
-          actual_sets: 1,
-          actual_reps: 1,
-          weight_kg: 0,
-          notes: ''
+          session_detail_id: detail.session_detail_id,
+          actual_sets: parseInt(logForm.actual_sets),
+          actual_reps: parseInt(logForm.actual_reps),
+          weight_kg: parseFloat(logForm.weight_kg) || 0,
+          duration_seconds: 0,
+          notes: logForm.notes || ''
         })
       });
-      const data = await res.json();
-      if (data.message === 'Workout logged.') {
-        if (detailsModal?.session) {
-          openDetails(detailsModal.session);
-        }
-      } else {
-        setError(data.message || 'Failed to log workout');
-      }
-    } catch (error) {
-      console.error('Error logging workout:', error);
-      setError('Failed to log workout');
+      setShowLogModal(false);
+      setLogExerciseId(null);
+      setLogForm({ actual_sets: '', actual_reps: '', weight_kg: '', notes: '' });
+      if (detailsModal?.session) openDetails(detailsModal.session);
+    } catch (e) {
+      alert('Failed to log set');
+    }
+  };
+
+  const handleCompleteSession = async () => {
+    if (!detailsModal?.session) return;
+    setCompletingSession(true);
+    try {
+      await fetch(`http://localhost:4000/api/workouts/${detailsModal.session.session_id}/complete`, { method: 'PATCH' });
+      setDetailsModal(null);
+      fetchSessions();
+      triggerRefresh();
+    } catch (e) {
+      alert('Failed to complete session');
+    }
+    setCompletingSession(false);
+  };
+
+  const allExercisesLogged = sessionDetails.length > 0 && sessionDetails.every(detail => sessionLogs.some(log => log.session_detail_id === detail.session_detail_id));
+
+  const getTodaysCompletedCount = () => {
+    const today = new Date().toISOString().slice(0, 10);
+    return sessions.filter(s => s.scheduled_date.slice(0, 10) === today && s.completed).length;
+  };
+
+  const handleAddExercise = async () => {
+    if (!detailsModal || !detailsModal.session || !addExerciseForm.exercise_id || !addExerciseForm.planned_sets || !addExerciseForm.planned_reps) return;
+    setAddExerciseLoading(true);
+    try {
+      await addExercisesToSession(detailsModal.session.session_id, {
+        exercises: [{
+          exercise_id: parseInt(addExerciseForm.exercise_id),
+          planned_sets: parseInt(addExerciseForm.planned_sets),
+          planned_reps: parseInt(addExerciseForm.planned_reps)
+        }]
+      });
+      setShowAddExerciseModal(false);
+      setAddExerciseForm({ exercise_id: '', planned_sets: '', planned_reps: '' });
+      openDetails(detailsModal.session);
+    } catch (e) {
+      setError('Failed to add exercise.');
+    }
+    setAddExerciseLoading(false);
+  };
+
+  const handleDeleteLog = async (logId: number) => {
+    try {
+      await fetch(`http://localhost:4000/api/workouts/log/${logId}`, { method: 'DELETE' });
+      if (detailsModal?.session) openDetails(detailsModal.session);
+    } catch (e) {
+      alert('Failed to delete log');
     }
   };
 
   return (
     <PageContainer>
       <Navbar />
-      <PageHeader title="Workout Tracking">
-        <button 
-          className="btn-primary" 
-          onClick={() => setShowForm(true)}
-        >
+      <div style={{ marginTop: '2.5rem', marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+        <h2 className={styles.dashboardTitle} style={{ textAlign: 'center' }}>Workout Tracking</h2>
+        <button className={styles.scheduleBtn} style={{ alignSelf: 'center' }} onClick={() => setShowForm(true)}>
           <HiPlusSm /> Schedule Workout
         </button>
-      </PageHeader>
+      </div>
 
-      {/* Workout Stats */}
       <CardGrid className={styles.statsGrid}>
         <StatCard 
           value={workoutStats.totalWorkouts}
           label="Total Workouts"
           icon={<FaDumbbell />}
+          className={styles.statCard}
         />
         <StatCard 
-          value={workoutStats.completedToday ? "Yes" : "Not Yet"}
+          value={getTodaysCompletedCount()}
           label="Today's Workout"
           icon={<FaFire />}
+          className={styles.statCard}
         />
         <StatCard 
           value={`${workoutStats.weeklyStreak} weeks`}
           label="Current Streak"
           icon={<FaTrophy />}
+          className={styles.statCard}
         />
         <StatCard 
           value={`${workoutStats.avgDuration} min`}
           label="Avg. Duration"
           icon={<FaClock />}
+          className={styles.statCard}
         />
       </CardGrid>
 
-      {/* Sessions List */}
       <DragDropContext onDragEnd={onDragEnd}>
         <StrictModeDroppable droppableId="sessions">
           {(provided: DroppableProvided) => (
-            <CardGrid
+            <div
               {...provided.droppableProps}
               ref={provided.innerRef}
+              className={styles.cardGrid}
             >
               {loading ? (
                 <Card className={styles.loadingCard}>
@@ -371,12 +432,12 @@ const Workouts: React.FC = () => {
               ) : sessions.length === 0 ? (
                 <Card className={styles.emptyCard}>
                   <p>No workouts scheduled. Start by scheduling your first workout!</p>
-                  <button className="btn-primary" onClick={() => setShowForm(true)}>
+                  <button className={styles.scheduleBtn} onClick={() => setShowForm(true)}>
                     <HiPlusSm /> Schedule First Workout
                   </button>
                 </Card>
               ) : (
-                sessions.map((session, index) => (
+                [...sessions].sort((a, b) => new Date(a.scheduled_date).getTime() - new Date(b.scheduled_date).getTime()).map((session, index) => (
                   <Draggable 
                     key={session.session_id} 
                     draggableId={session.session_id.toString()} 
@@ -389,14 +450,12 @@ const Workouts: React.FC = () => {
                         {...dragProvided.dragHandleProps}
                       >
                         <Card className={`${styles.sessionCard} ${snapshot.isDragging ? styles.dragging : ''}`}>
-                          {session.completed && (
-                            <div className={styles.completedBadge}>
-                              Completed
-                            </div>
-                          )}
                           <div className={styles.sessionHeader}>
                             <div>
-                              <h3 className={styles.sessionDate}>{formatDate(session.scheduled_date)}</h3>
+                              <h3 className={`${styles.sessionDate} ${session.completed ? styles.completed : ''}`}>{formatDate(session.scheduled_date)}</h3>
+                              <div className={styles.sessionStatus}>
+                                Status: {session.completed ? <span style={{ color: '#4caf50' }}>Complete</span> : <span style={{ color: '#ff3e3e' }}>Incomplete</span>}
+                              </div>
                               <p className={styles.sessionType}>{session.type}</p>
                               {session.notes && (
                                 <p className={styles.sessionNotes}>{session.notes}</p>
@@ -404,13 +463,13 @@ const Workouts: React.FC = () => {
                             </div>
                             <div className={styles.sessionActions}>
                               <button 
-                                className="btn-secondary"
+                                className={styles.detailsBtn}
                                 onClick={() => openDetails(session)}
                               >
                                 Details
                               </button>
                               <button 
-                                className="btn-icon-danger"
+                                className={styles.deleteBtn}
                                 onClick={() => setDeleteSessionConfirm(session.session_id)}
                               >
                                 Delete
@@ -424,12 +483,11 @@ const Workouts: React.FC = () => {
                 ))
               )}
               {provided.placeholder}
-            </CardGrid>
+            </div>
           )}
         </StrictModeDroppable>
       </DragDropContext>
 
-      {/* Schedule Workout Modal */}
       {showForm && (
         <ModalContent title="Schedule Workout" onClose={() => setShowForm(false)}>
           <GridForm onSubmit={handleSchedule}>
@@ -466,8 +524,8 @@ const Workouts: React.FC = () => {
             {error && <div className={styles.error}>{error}</div>}
             
             <div className={styles.modalActions}>
-              <button type="submit" className="btn-primary">Schedule</button>
-              <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>
+              <button type="submit" className={styles.scheduleBtn}>Schedule</button>
+              <button type="button" className={styles.cancelBtn} onClick={() => setShowForm(false)}>
                 Cancel
               </button>
             </div>
@@ -475,94 +533,158 @@ const Workouts: React.FC = () => {
         </ModalContent>
       )}
 
-      {/* Session Details Modal */}
       {detailsModal?.open && (
         <ModalContent 
           title={`Workout Details - ${formatDate(detailsModal.session.scheduled_date)}`}
           onClose={() => setDetailsModal(null)}
         >
-          <div className={styles.exercisesList}>
-            {sessionDetails.map(detail => (
-              <div key={detail.session_detail_id} className={styles.exerciseItem}>
-                <div className={styles.exerciseInfo}>
-                  <div className={styles.exerciseName}>{detail.name}</div>
-                  <div className={styles.exerciseStats}>
-                    <span>{detail.planned_sets} sets</span>
-                    <span>{detail.planned_reps} reps</span>
+          <div className={styles.exercisesList} style={{ maxWidth: '900px', margin: '0 auto' }}>
+            {sessionDetails.map((detail) => (
+              <div
+                key={detail.session_detail_id}
+                className={styles.exerciseItem}
+                style={{ display: 'flex', flexDirection: 'row', gap: '2.5rem', alignItems: 'flex-start' }}
+              >
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className={styles.exerciseInfoRow}>
+                    <span className={styles.draggableIcon}>
+                      
+                    </span>
+                    <div className={styles.exerciseInfo}>
+                      <div className={styles.exerciseName}>{detail.name}</div>
+                      <div className={styles.exerciseStats}>
+                        <span>{detail.planned_sets} sets</span>
+                        <span>{detail.planned_reps} reps</span>
+                      </div>
+                      {detail.description && <div className={styles.exerciseDescription}>{detail.description}</div>}
+                    </div>
+                  </div>
+                  <div className={styles.exerciseActions}>
+                    {!detailsModal.session.completed && (
+                      <>
+                        <button className={styles.logSetBtn} onClick={() => openLogModal(detail.exercise_id)}>Log Set</button>
+                        <button className={styles.removeBtn} onClick={() => setDeleteExerciseConfirm(detail.session_detail_id)}>Remove</button>
+                      </>
+                    )}
                   </div>
                 </div>
-                <div className={styles.exerciseActions}>
-                  {!detailsModal.session.completed && (
-                    <>
-                      <button
-                        className="btn-secondary"
-                        onClick={() => handleStartLog(detail.session_detail_id)}
-                      >
-                        Log Set
-                      </button>
-                      <button
-                        className="btn-icon-danger"
-                        onClick={() => setDeleteExerciseConfirm(detail.session_detail_id)}
-                      >
-                        Remove
-                      </button>
-                    </>
-                  )}
-                </div>
+                {sessionLogs.filter(log => log.session_detail_id === detail.session_detail_id).length > 0 && (
+                  <div className={styles.realityPerformanceBlock} style={{ flex: 1, minWidth: 0, borderLeft: '1px solid rgba(255,255,255,0.10)', paddingLeft: '2rem' }}>
+                    <div className={styles.realityPerformanceLabel}>Reality performance:</div>
+                    {sessionLogs.filter(log => log.session_detail_id === detail.session_detail_id).map(log => (
+                      <div key={log.log_id} className={styles.exerciseLogItem}>
+                        <span className={styles.logLeft}><strong>{log.actual_sets} sets</strong> x <strong>{log.actual_reps} reps</strong></span>
+                        <span className={styles.logRight}>
+                          <span className={styles.logDraggableIcon}>
+                            
+                          </span>
+                          <span><strong>{log.weight_kg}kg</strong></span>
+                          {log.notes && <span className="logNotes">({log.notes})</span>}
+                          <button className={styles.deleteLogBtn} onClick={() => handleDeleteLog(log.log_id)}><FaTimes /></button>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
-            
-            {!detailsModal.session.completed && (
-              <button 
-                className="btn-secondary" 
-                onClick={() => {
-                  fetchAllExercises();
-                  setShowAddExercise(true);
-                }}
+            {!detailsModal.session.completed && allExercisesLogged && (
+              <button
+                className={styles.completeSessionBtn}
+                style={{ marginTop: 24, width: '100%' }}
+                onClick={handleCompleteSession}
+                disabled={completingSession}
               >
-                <HiPlusSm /> Add Exercise
+                {completingSession ? 'Completing...' : 'Complete Session'}
+              </button>
+            )}
+            {!detailsModal.session.completed && !allExercisesLogged && (
+              <div style={{ color: '#aaa', marginTop: 16, fontSize: '0.98em' }}>
+                Log at least one set for every exercise to complete this session.
+              </div>
+            )}
+            {!detailsModal.session.completed && (
+              <button className={styles.addExerciseBtn} style={{ marginTop: 16, width: '100%' }} onClick={() => { setShowAddExerciseModal(true); fetchAllExercises(); }}>
+                Add Exercise
               </button>
             )}
           </div>
-
-          {showAddExercise && (
-            <div className={styles.exerciseGrid}>
-              {allExercises.map(exercise => (
-                <div 
-                  key={exercise.exercise_id} 
-                  className={`${styles.exerciseOption} ${
-                    addExerciseForm.exercise_id === exercise.exercise_id.toString() ? styles.selected : ''
-                  }`}
-                  onClick={() => handleSelectExercise(exercise)}
-                >
-                  <div className={styles.exerciseName}>{exercise.name}</div>
-                  {exercise.description && (
-                    <div className={styles.exerciseDescription}>{exercise.description}</div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Rest of the modals and forms remain mostly unchanged */}
-          {/* ... */}
         </ModalContent>
       )}
 
-      {/* Delete Confirmation Modals */}
+      {showAddExerciseModal && (
+        <ModalContent title="Add Exercise to Session" onClose={() => setShowAddExerciseModal(false)}>
+          <div className={styles.exerciseGrid}>
+            {allExercises.map(exercise => (
+              <div 
+                key={exercise.exercise_id} 
+                className={`${styles.exerciseOption} ${addExerciseForm.exercise_id === exercise.exercise_id.toString() ? styles.selected : ''}`}
+                onClick={() => setAddExerciseForm(f => ({
+                  ...f,
+                  exercise_id: exercise.exercise_id.toString(),
+                  planned_sets: exercise.default_sets?.toString() || '',
+                  planned_reps: exercise.default_reps?.toString() || ''
+                }))}
+              >
+                <div className={styles.exerciseName}>{exercise.name}</div>
+                {exercise.description && (
+                  <div className={styles.exerciseDescription}>{exercise.description}</div>
+                )}
+                {addExerciseForm.exercise_id === exercise.exercise_id.toString() && (
+                  <div style={{ color: '#aaa', fontSize: '0.95em', marginTop: 4 }}>
+                    Default: {exercise.default_sets || '-'} sets, {exercise.default_reps || '-'} reps
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginTop: '1rem' }}>
+            <input
+              type="number"
+              min="1"
+              placeholder="Sets"
+              value={addExerciseForm.planned_sets}
+              onChange={e => setAddExerciseForm(f => ({ ...f, planned_sets: e.target.value }))}
+              style={{ width: 80, padding: 8, borderRadius: 6, border: '1px solid #444', background: '#222', color: '#fff' }}
+            />
+            <input
+              type="number"
+              min="1"
+              placeholder="Reps"
+              value={addExerciseForm.planned_reps}
+              onChange={e => setAddExerciseForm(f => ({ ...f, planned_reps: e.target.value }))}
+              style={{ width: 80, padding: 8, borderRadius: 6, border: '1px solid #444', background: '#222', color: '#fff' }}
+            />
+            <button
+              className={styles.addExerciseBtn}
+              onClick={handleAddExercise}
+              disabled={addExerciseLoading || !addExerciseForm.exercise_id || !addExerciseForm.planned_sets || !addExerciseForm.planned_reps}
+            >
+              {addExerciseLoading ? 'Adding...' : 'Add'}
+            </button>
+            <button
+              className={styles.cancelBtn}
+              onClick={() => setShowAddExerciseModal(false)}
+            >
+              Cancel
+            </button>
+          </div>
+        </ModalContent>
+      )}
+
       {deleteSessionConfirm && (
         <ModalContent title="Delete Workout" onClose={() => setDeleteSessionConfirm(null)}>
           <div className={styles.deleteConfirm}>
             <p>Are you sure you want to delete this workout?</p>
             <div className={styles.modalActions}>
               <button 
-                className="btn-danger"
+                className={styles.deleteBtn}
                 onClick={() => handleDeleteSession(deleteSessionConfirm)}
               >
                 Delete
               </button>
               <button 
-                className="btn-secondary"
+                className={styles.cancelBtn}
                 onClick={() => setDeleteSessionConfirm(null)}
               >
                 Cancel
@@ -572,25 +694,74 @@ const Workouts: React.FC = () => {
         </ModalContent>
       )}
 
-      {/* Exercise Details Modal */}
       {deleteExerciseConfirm && (
         <ModalContent title="Delete Exercise" onClose={() => setDeleteExerciseConfirm(null)}>
           <div className={styles.deleteConfirm}>
             <p>Are you sure you want to remove this exercise?</p>
             <div className={styles.modalActions}>
               <button 
-                className="btn-danger"
+                className={styles.deleteBtn}
                 onClick={() => handleDeleteExercise(deleteExerciseConfirm)}
               >
                 Delete
               </button>
               <button 
-                className="btn-secondary"
+                className={styles.cancelBtn}
                 onClick={() => setDeleteExerciseConfirm(null)}
               >
                 Cancel
               </button>
             </div>
+          </div>
+        </ModalContent>
+      )}
+
+      {showLogModal && (
+        <ModalContent title="Log Set">
+          <div className={styles.formGroup}>
+            <label>Sets</label>
+            <input
+              type="number"
+              min="1"
+              value={logForm.actual_sets}
+              onChange={e => setLogForm(f => ({ ...f, actual_sets: e.target.value }))}
+              required
+            />
+          </div>
+          <div className={styles.formGroup}>
+            <label>Reps</label>
+            <input
+              type="number"
+              min="1"
+              value={logForm.actual_reps}
+              onChange={e => setLogForm(f => ({ ...f, actual_reps: e.target.value }))}
+              required
+            />
+          </div>
+          <div className={styles.formGroup}>
+            <label>Weight (kg)</label>
+            <input
+              type="number"
+              min="0"
+              value={logForm.weight_kg}
+              onChange={e => setLogForm(f => ({ ...f, weight_kg: e.target.value }))}
+            />
+          </div>
+          <div className={styles.formGroup}>
+            <label>Notes</label>
+            <textarea
+              value={logForm.notes}
+              onChange={e => setLogForm(f => ({ ...f, notes: e.target.value }))}
+              rows={2}
+            />
+          </div>
+          <div className={styles.modalActions}>
+            <button className={styles.addExerciseBtn} onClick={handleSubmitLog} disabled={!logForm.actual_sets || !logForm.actual_reps}>
+              Log
+            </button>
+            <button className={styles.cancelBtn} onClick={() => setShowLogModal(false)}>
+              Cancel
+            </button>
           </div>
         </ModalContent>
       )}

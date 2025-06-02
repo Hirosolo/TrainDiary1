@@ -266,16 +266,13 @@ const Foods: React.FC = () => {
   return (
     <PageContainer>
       <Navbar />
-      <PageHeader title="Nutrition Tracking">
-        <button 
-          className="btn-primary" 
-          onClick={() => setShowForm(true)}
-        >
-          <HiPlusSm /> Log Meal
+      <div style={{ marginTop: '2.5rem', marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+        <h2 className={styles.dashboardTitle} style={{ textAlign: 'center' }}>Food Log</h2>
+        <button className={styles.logMealBtn} style={{ alignSelf: 'center' }} onClick={() => setShowForm(true)}>
+          <HiPlusSm /> Log New Meal
         </button>
-      </PageHeader>
+      </div>
 
-      {/* Daily Stats */}
       <CardGrid className={styles.statsGrid}>
         <StatCard 
           value={dailyTotals.calories.toFixed(0)}
@@ -299,7 +296,6 @@ const Foods: React.FC = () => {
         />
       </CardGrid>
 
-      {/* Meals List */}
       <CardGrid>
         {loading ? (
           <Card className={styles.loadingCard}>
@@ -324,13 +320,13 @@ const Foods: React.FC = () => {
                 </div>
                 <div className={styles.mealActions}>
                   <button 
-                    className="btn-icon" 
+                    className={styles.detailsBtn}
                     onClick={() => handleExpandMeal(meal.meal_id)}
                   >
                     {expandedMeal === meal.meal_id ? 'Hide Details' : 'Show Details'}
                   </button>
                   <button 
-                    className="btn-icon-danger" 
+                    className={styles.deleteBtn}
                     onClick={() => handleDeleteMeal(meal.meal_id)}
                   >
                     Delete
@@ -359,11 +355,10 @@ const Foods: React.FC = () => {
         )}
       </CardGrid>
 
-      {/* Log Meal Modal */}
       {showForm && (
-        <ModalContent title="Log New Meal" onClose={() => setShowForm(false)}>
+        <ModalContent title="Log New Meal">
           <GridForm onSubmit={handleLogMeal}>
-            <div className={styles.formGroup}>
+            <div className={styles.formGroup} style={{ gridColumn: '1 / -1' }}>
               <label>Date</label>
               <input
                 type="date"
@@ -372,7 +367,7 @@ const Foods: React.FC = () => {
                 required
               />
             </div>
-            <div className={styles.formGroup}>
+            <div className={styles.formGroup} style={{ gridColumn: '1 / -1' }}>
               <label>Meal Type</label>
               <select
                 value={form.meal_type}
@@ -400,7 +395,7 @@ const Foods: React.FC = () => {
                   </button>
                 </div>
               ))}
-              <button type="button" className="btn-secondary" onClick={handleAddFood}>
+              <button type="button" className={styles.addFoodBtn} onClick={handleAddFood}>
                 <HiPlusSm /> Add Food
               </button>
             </div>
@@ -417,10 +412,9 @@ const Foods: React.FC = () => {
         </ModalContent>
       )}
 
-      {/* Food Selection Modal */}
       {showFoodModal && (
-        <ModalContent title="Add Food" onClose={() => setShowFoodModal(false)}>
-          <div className={styles.searchBox}>
+        <ModalContent title="Add Food to Meal">
+          <div className={styles.foodSearchGrid}>
             <input
               type="text"
               placeholder="Search foods..."
@@ -453,8 +447,8 @@ const Foods: React.FC = () => {
           </div>
 
           {selectedFood && (
-            <div className={styles.amountInput}>
-              <label>Amount (grams)</label>
+            <div className={styles.formGroup} style={{ maxWidth: 'none', margin: '1rem 0' }}>
+              <label>Amount ({selectedFood.serving_type})</label>
               <input
                 type="number"
                 value={amountGrams}
@@ -462,19 +456,29 @@ const Foods: React.FC = () => {
                 min="0"
                 required
               />
-              <button 
-                className="btn-primary"
-                onClick={handleAddFoodToMeal}
-                disabled={!amountGrams}
-              >
-                Add to Meal
-              </button>
             </div>
           )}
+
+          <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginTop: '1rem' }}>
+            <button
+              className={styles.addFoodToMealBtn}
+              onClick={handleAddFoodToMeal}
+              disabled={!selectedFood || !amountGrams}
+              style={{ flexGrow: 1 }}
+            >
+              Add To Meal
+            </button>
+            <button
+              className={styles.cancelBtn}
+              onClick={() => setShowFoodModal(false)}
+              style={{ flexGrow: 1 }}
+            >
+              Close
+            </button>
+          </div>
         </ModalContent>
       )}
 
-      {/* Delete Confirmation Modal */}
       {deleteMealId && (
         <ModalContent title="Delete Meal" onClose={() => setDeleteMealId(null)}>
           <div className={styles.deleteConfirm}>

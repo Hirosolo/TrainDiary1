@@ -28,11 +28,12 @@ interface StatCardProps {
   value: string | number;
   label: string;
   icon?: React.ReactNode;
+  className?: string;
 }
 
-export const StatCard: React.FC<StatCardProps> = ({ value, label, icon }) => (
-  <div className={styles.statCard}>
-    {icon && <div className="stat-icon">{icon}</div>}
+export const StatCard: React.FC<StatCardProps> = ({ value, label, icon, className = '' }) => (
+  <div className={`${styles.statCard} ${className}`}>
+    {icon && <span className="stat-icon">{icon}</span>}
     <div className={styles.statValue}>{value}</div>
     <div className={styles.statLabel}>{label}</div>
   </div>
@@ -41,15 +42,15 @@ export const StatCard: React.FC<StatCardProps> = ({ value, label, icon }) => (
 interface ModalContentProps {
   children: React.ReactNode;
   title: string;
-  onClose: () => void;
+  onClose?: () => void;
 }
 
 export const ModalContent: React.FC<ModalContentProps> = ({ children, title, onClose }) => (
   <div className="modal-bg">
-    <div className={styles.modalContent}>
+    <div className={`${styles.modalContent} ModalContent`}>
       <div className={styles.modalHeader}>
         <h3>{title}</h3>
-        <button className="btn-outline" onClick={onClose}>Close</button>
+        {onClose && <button className="btn-outline" onClick={onClose}>Close</button>}
       </div>
       {children}
     </div>

@@ -25,6 +25,7 @@ export const getPlanDetails = async (req: Request, res: Response) => {
   const { planId } = req.params;
   const conn = await pool.getConnection();
   try {
+    // Fetch plan details
     const [planRows] = await conn.query(`
       SELECT wp.*, MAX(pd.day_number) as duration_days 
       FROM workout_plans wp 
@@ -36,27 +37,45 @@ export const getPlanDetails = async (req: Request, res: Response) => {
       return res.status(404).json({ message: 'Plan not found.' });
     }
 
-    const [exercises] = await conn.query(`
-      SELECT pde.*, pd.day_number, e.name, e.category, e.description
-      FROM plan_days pd
-      JOIN plan_day_exercises pde ON pd.plan_day_id = pde.plan_day_id
-      JOIN exercises e ON pde.exercise_id = e.exercise_id
-      WHERE pd.plan_id = ?
-      ORDER BY pd.day_number ASC`, [planId]
-    );
+    const planDetails = (planRows as any[])[0];
 
-    res.json({ 
-      ...(planRows as any[])[0],
-      exercises: (exercises as any[]).map((ex: any) => ({
+    // Fetch plan days
+    const [dayRows] = await conn.query(
+      'SELECT * FROM plan_days WHERE plan_id = ? ORDER BY day_number ASC', 
+      [planId]
+    );
+    const planDays = dayRows as any[];
+
+    // Fetch exercises for all days in the plan
+    const [exerciseRows] = await conn.query(`
+      SELECT pde.*, e.name as exercise_name, e.category, e.description
+      FROM plan_day_exercises pde
+      JOIN exercises e ON pde.exercise_id = e.exercise_id
+      JOIN plan_days pd ON pde.plan_day_id = pd.plan_day_id
+      WHERE pd.plan_id = ?
+      ORDER BY pd.day_number ASC, pde.plan_day_exercise_id ASC`, [planId]
+    );
+    const exercises = exerciseRows as any[];
+
+    // Group exercises by plan_day_id
+    const daysWithExercises = planDays.map(day => ({
+      ...day,
+      exercises: exercises.filter(ex => ex.plan_day_id === day.plan_day_id).map(ex => ({
+        plan_day_exercise_id: ex.plan_day_exercise_id,
         exercise_id: ex.exercise_id,
-        name: ex.name,
+        exercise_name: ex.exercise_name,
         category: ex.category,
         description: ex.description,
-        day_number: ex.day_number,
-        recommended_sets: ex.sets,
-        recommended_reps: ex.reps
+        sets: ex.sets,
+        reps: ex.reps,
       }))
+    }));
+
+    res.json({ 
+      ...planDetails,
+      days: daysWithExercises
     });
+
   } catch (err) {
     res.status(500).json({ message: 'Failed to fetch plan details.', error: (err as Error).message });
   } finally {
