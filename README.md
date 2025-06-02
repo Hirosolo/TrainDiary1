@@ -98,8 +98,8 @@ Follow these steps to get the project up and running on your local machine:
     *   Run the start command:
 
         ```bash
-        npm start
-        # or yarn start
+        npm run dev
+        # or yarn dev
         ```
 
     The backend server should start on the port specified in your backend `.env` file (defaulting to 4000).
@@ -127,5 +127,3 @@ Open your web browser and visit the address provided by the frontend development
 *   View scheduled workout sessions
 *   Log exercises with sets, reps, and notes
 *   Track workout progress
-
-https://raw.githack.com/Hirosolo/TrainDiary1/main/index.html
