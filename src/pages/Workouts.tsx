@@ -17,7 +17,7 @@ import {
   StatCard
 } from '../components/shared/SharedComponents';
 import styles from './Workouts.module.css';
-import { addExercisesToSession, getSessions, logWorkout, markSessionCompleted } from '../api';
+import { addExercisesToSession, getSessions, logWorkout, markSessionCompleted, createSession } from '../api';
 
 interface Session {
   session_id: number;
@@ -166,17 +166,12 @@ const Workouts: React.FC = () => {
     e.preventDefault();
     setError('');
     try {
-      const response = await fetch('http://localhost:4000/api/workouts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          user_id: user?.user_id, 
-          scheduled_date: formDate, 
-          notes: formNotes, 
-          type: formType 
-        })
+      const data = await createSession({ 
+        user_id: user?.user_id, 
+        scheduled_date: formDate, 
+        notes: formNotes, 
+        type: formType 
       });
-      const data = await response.json();
       
       if (data.session_id) {
         setShowForm(false);
@@ -204,7 +199,7 @@ const Workouts: React.FC = () => {
 
   const handleDeleteExercise = async (detailId: number) => {
     try {
-      await fetch(`http://localhost:4000/api/workouts/details/${detailId}`, { method: 'DELETE' });
+      await fetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:4000'}/api/workouts/details/${detailId}`, { method: 'DELETE' });
       setDeleteExerciseConfirm(null);
       if (detailsModal?.session) {
         openDetails(detailsModal.session);
@@ -217,7 +212,7 @@ const Workouts: React.FC = () => {
 
   const handleDeleteSession = async (sessionId: number) => {
     try {
-      await fetch(`http://localhost:4000/api/workouts/${sessionId}`, { method: 'DELETE' });
+      await fetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:4000'}/api/workouts/${sessionId}`, { method: 'DELETE' });
       setDeleteSessionConfirm(null);
       fetchSessions();
       triggerRefresh();
@@ -240,7 +235,7 @@ const Workouts: React.FC = () => {
     setSessions(reorderedSessions);
 
     try {
-      await fetch('http://localhost:4000/api/workouts/reorder', {
+      await fetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:4000'}/api/workouts/reorder`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

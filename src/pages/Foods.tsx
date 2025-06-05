@@ -156,21 +156,23 @@ const Foods: React.FC = () => {
       setError('Add at least one food.');
       return;
     }
-    const foodsPayload = mealFoods.map(f => ({ food_id: f.food.food_id, amount_grams: f.amount_grams }));    try {
+    const foodsPayload = mealFoods.map(f => ({ food_id: f.food.food_id, amount_grams: f.amount_grams }));
+    try {
       setError('');
       
       // Step 1: Log the meal
-      const res = await fetch('http://localhost:4000/api/foods/meals', {
+      const res = await fetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:4000'}/api/foods/meals`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_id: user?.user_id, meal_type: form.meal_type, log_date: form.log_date, foods: foodsPayload })
       });
       const data = await res.json();
       
-      if (data.meal_id) {        // Step 2: Generate new summaries (both daily and weekly)
+      if (data.meal_id) {
+        // Step 2: Generate new summaries (both daily and weekly)
         const generateSummaries = async () => {
           // Generate daily summary
-          const dailySummaryRes = await fetch('http://localhost:4000/api/summary/generate', {
+          const dailySummaryRes = await fetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:4000'}/api/summary/generate`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -185,7 +187,7 @@ const Foods: React.FC = () => {
           }
 
           // Generate weekly summary
-          const weeklySummaryRes = await fetch('http://localhost:4000/api/summary/generate', {
+          const weeklySummaryRes = await fetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:4000'}/api/summary/generate`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
