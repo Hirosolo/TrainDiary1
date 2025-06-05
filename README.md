@@ -127,3 +127,4 @@ Open your web browser and visit the address provided by the frontend development
 *   View scheduled workout sessions
 *   Log exercises with sets, reps, and notes
 *   Track workout progress
+w

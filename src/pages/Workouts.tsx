@@ -17,7 +17,7 @@ import {
   StatCard
 } from '../components/shared/SharedComponents';
 import styles from './Workouts.module.css';
-import { addExercisesToSession } from '../api';
+import { addExercisesToSession, getSessions, logWorkout, markSessionCompleted } from '../api';
 
 interface Session {
   session_id: number;
@@ -138,8 +138,7 @@ const Workouts: React.FC = () => {
   const fetchSessions = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`http://localhost:4000/api/workouts?user_id=${user?.user_id}`);
-      const data = await res.json();
+      const data = await getSessions(user?.user_id);
       setSessions(data);
     } catch (error) {
       console.error('Error fetching sessions:', error);
@@ -152,8 +151,8 @@ const Workouts: React.FC = () => {
     setDetailsModal({ session, open: true });
     try {
       const [detailsRes, logsRes] = await Promise.all([
-        fetch(`http://localhost:4000/api/workouts/${session.session_id}/details`),
-        fetch(`http://localhost:4000/api/workouts/${session.session_id}/logs`)
+        fetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:4000'}/api/workouts/${session.session_id}/details`),
+        fetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:4000'}/api/workouts/${session.session_id}/logs`)
       ]);
       setSessionDetails(await detailsRes.json());
       setSessionLogs(await logsRes.json());
@@ -309,17 +308,13 @@ const Workouts: React.FC = () => {
     try {
       const detail = sessionDetails.find(d => d.exercise_id === logExerciseId);
       if (!detail) return;
-      const res = await fetch('http://localhost:4000/api/workouts/log', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          session_detail_id: detail.session_detail_id,
-          actual_sets: parseInt(logForm.actual_sets),
-          actual_reps: parseInt(logForm.actual_reps),
-          weight_kg: parseFloat(logForm.weight_kg) || 0,
-          duration_seconds: 0,
-          notes: logForm.notes || ''
-        })
+      await logWorkout({
+        session_detail_id: detail.session_detail_id,
+        actual_sets: parseInt(logForm.actual_sets),
+        actual_reps: parseInt(logForm.actual_reps),
+        weight_kg: parseFloat(logForm.weight_kg) || 0,
+        duration_seconds: 0,
+        notes: logForm.notes || ''
       });
       setShowLogModal(false);
       setLogExerciseId(null);
@@ -334,7 +329,7 @@ const Workouts: React.FC = () => {
     if (!detailsModal?.session) return;
     setCompletingSession(true);
     try {
-      await fetch(`http://localhost:4000/api/workouts/${detailsModal.session.session_id}/complete`, { method: 'PATCH' });
+      await markSessionCompleted(detailsModal.session.session_id);
       setDetailsModal(null);
       fetchSessions();
       triggerRefresh();
@@ -373,7 +368,7 @@ const Workouts: React.FC = () => {
 
   const handleDeleteLog = async (logId: number) => {
     try {
-      await fetch(`http://localhost:4000/api/workouts/log/${logId}`, { method: 'DELETE' });
+      await fetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:4000'}/api/workouts/log/${logId}`, { method: 'DELETE' });
       if (detailsModal?.session) openDetails(detailsModal.session);
     } catch (e) {
       alert('Failed to delete log');

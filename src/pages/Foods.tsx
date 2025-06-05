@@ -14,6 +14,7 @@ import {
   StatCard
 } from '../components/shared/SharedComponents';
 import styles from './Foods.module.css';
+import { getMeals } from '../api/index';
 
 interface Meal {
   meal_id: number;
@@ -98,16 +99,16 @@ const Foods: React.FC = () => {
   }, [meals]);
 
   const fetchMeals = async () => {
+    if (!user?.user_id) return;
     setLoading(true);
     try {
       // Fetch basic meal data
-      const mealsRes = await fetch(`http://localhost:4000/api/foods/meals?user_id=${user?.user_id}`);
-      const mealsData = await mealsRes.json();
+      const mealsData = await getMeals(user.user_id);
       
       // Fetch food details for each meal
       const mealsWithFoods = await Promise.all(
         mealsData.map(async (meal: Meal) => {
-          const foodsRes = await fetch(`http://localhost:4000/api/foods/meals/${meal.meal_id}`);
+          const foodsRes = await fetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:4000'}/api/foods/meals/${meal.meal_id}`);
           const foodsData = await foodsRes.json();
           return { ...meal, foods: foodsData };
         })
@@ -121,7 +122,7 @@ const Foods: React.FC = () => {
   };
 
   const fetchFoods = async () => {
-    const res = await fetch('http://localhost:4000/api/foods');
+    const res = await fetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:4000'}/api/foods`);
     const data = await res.json();
     setFoods(data);
   };

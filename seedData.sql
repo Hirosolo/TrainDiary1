@@ -11,18 +11,7 @@ INSERT INTO foods (name, calories_per_serving, protein_per_serving, carbs_per_se
 ('Greek Yogurt', 100, 17, 6, 0, '170g (6oz)', 'greek_yogurt.png'),
 ('Oats', 150, 5, 27, 3, '1/2 cup dry', 'oats.png');
 
--- Seed data for exercises
-INSERT INTO exercises (name, category, default_sets, default_reps, description) VALUES
-('Bench Press', 'Chest', 4, 8, 'Barbell bench press for chest strength.'),
-('Squat', 'Legs', 4, 10, 'Barbell back squat for legs and glutes.'),
-('Deadlift', 'Back', 3, 6, 'Barbell deadlift for posterior chain.'),
-('Pull Up', 'Back', 3, 8, 'Bodyweight pull ups for back and biceps.'),
-('Push Up', 'Chest', 3, 15, 'Bodyweight push ups for chest and triceps.'),
-('Shoulder Press', 'Shoulders', 3, 10, 'Dumbbell or barbell shoulder press.'),
-('Bicep Curl', 'Arms', 3, 12, 'Dumbbell bicep curls.'),
-('Tricep Extension', 'Arms', 3, 12, 'Dumbbell or cable tricep extensions.'),
-('Plank', 'Core', 3, 60, 'Hold plank position for time (seconds).'),
-('Lunge', 'Legs', 3, 12, 'Dumbbell or bodyweight lunges.'); 
+
 INSERT INTO exercises (exercise_id, name, category, default_sets, default_reps, description) VALUES
 (1,'Bench Press', 'Chest', 4, 8, 'Barbell bench press for chest strength.'),
 (2,'Squat', 'Legs', 4, 10, 'Barbell back squat for legs and glutes.'),
